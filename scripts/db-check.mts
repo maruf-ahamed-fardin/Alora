@@ -5,9 +5,11 @@ import {
   channels,
   conversations,
   customers,
+  knowledgeChunks,
   knowledgeDocuments,
   messages,
   products,
+  toneExamples,
 } from "../src/db/schema";
 
 // Health check for the local database. Every test that writes runs inside a
@@ -53,8 +55,8 @@ const tables = await pg.query<{ table_name: string }>(
    order by table_name`,
 );
 report(
-  tables.rows.length === 7,
-  "7 tables exist",
+  tables.rows.length === 9,
+  "9 tables exist",
   tables.rows.map((r) => r.table_name).join(", "),
 );
 
@@ -122,6 +124,57 @@ if (demo) {
         "can store and read a conversation message (Banglish text)",
       );
     });
+
+    const unit = (i: number) =>
+      Array.from({ length: 384 }, (_, k) => (k === i ? 1 : 0));
+    const [doc] = await db
+      .select()
+      .from(knowledgeDocuments)
+      .where(eq(knowledgeDocuments.businessId, demo.id))
+      .limit(1);
+
+    await rolledBack(async (tx) => {
+      await tx.insert(knowledgeChunks).values({
+        businessId: demo.id,
+        documentId: doc.id,
+        chunkIndex: 99,
+        content: "test",
+        embedding: unit(0),
+        embeddingModel: "test",
+      });
+      await tx.insert(toneExamples).values({
+        businessId: demo.id,
+        customerMessage: "hi",
+        reply: "hello",
+        embedding: unit(1),
+        embeddingModel: "test",
+      });
+      const nearest = await tx.execute(
+        sql`select content from knowledge_chunks where chunk_index = 99 order by embedding <=> ${JSON.stringify(unit(0))}::vector limit 1`,
+      );
+      report(
+        (nearest.rows[0] as { content: string } | undefined)?.content === "test",
+        "384-dimension vectors can be stored and searched",
+      );
+    });
+
+    await mustBeRejected(
+      "another business cannot attach a chunk to this business's document",
+      async (tx) => {
+        const [other] = await tx
+          .insert(businesses)
+          .values({ slug: "other-shop", name: "Other Shop" })
+          .returning();
+        await tx.insert(knowledgeChunks).values({
+          businessId: other.id,
+          documentId: doc.id,
+          chunkIndex: 0,
+          content: "leak",
+          embedding: unit(2),
+          embeddingModel: "test",
+        });
+      },
+    );
 
     await mustBeRejected(
       "duplicate webhook message (same external id) is rejected",
