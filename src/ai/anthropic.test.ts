@@ -14,7 +14,7 @@ import {
 // test queued. This checks our request shape and response handling without
 // an API key (it cannot prove the real API accepts the request).
 
-type Captured = { path: string; headers: IncomingHttpHeaders; body: any };
+type Captured = { path: string; headers: IncomingHttpHeaders; body: Record<string, unknown> };
 let server: Server;
 let baseURL: string;
 let captured: Captured | null = null;
