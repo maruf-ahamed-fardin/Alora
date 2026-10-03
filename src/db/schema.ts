@@ -12,6 +12,7 @@ import {
   timestamp,
   unique,
   uuid,
+  vector,
 } from "drizzle-orm/pg-core";
 
 // Every tenant-owned table carries business_id. Child tables reference their
@@ -49,6 +50,10 @@ export const knowledgeKind = pgEnum("knowledge_kind", [
   "payment",
   "other",
 ]);
+
+// Size of the embedding model's output (multilingual-e5-small). Changing the
+// model to one with a different size means a new migration and re-indexing.
+export const EMBEDDING_DIMENSIONS = 384;
 
 const createdAt = () =>
   timestamp("created_at", { withTimezone: true }).notNull().defaultNow();
@@ -212,8 +217,8 @@ export const products = pgTable(
   ],
 );
 
-// Source text for RAG. Chunks and embeddings arrive in D3, once the
-// embedding model (and so the vector size) is chosen.
+// Source text for RAG. Each document is cut into knowledge_chunks, and the
+// chunks are what gets embedded and searched.
 export const knowledgeDocuments = pgTable(
   "knowledge_documents",
   {
@@ -227,5 +232,54 @@ export const knowledgeDocuments = pgTable(
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
-  (t) => [index("knowledge_business_idx").on(t.businessId)],
+  (t) => [
+    unique("knowledge_documents_business_id_id_key").on(t.businessId, t.id),
+    index("knowledge_business_idx").on(t.businessId),
+  ],
+);
+
+export const knowledgeChunks = pgTable(
+  "knowledge_chunks",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    businessId: uuid("business_id")
+      .notNull()
+      .references(() => businesses.id, { onDelete: "cascade" }),
+    documentId: uuid("document_id").notNull(),
+    chunkIndex: integer("chunk_index").notNull(),
+    content: text("content").notNull(),
+    embedding: vector("embedding", { dimensions: EMBEDDING_DIMENSIONS }).notNull(),
+    // Which model produced the vector; vectors from different models are not
+    // comparable, so re-index when this changes.
+    embeddingModel: text("embedding_model").notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    unique("knowledge_chunks_document_index_key").on(t.documentId, t.chunkIndex),
+    foreignKey({
+      name: "knowledge_chunks_document_fk",
+      columns: [t.businessId, t.documentId],
+      foreignColumns: [knowledgeDocuments.businessId, knowledgeDocuments.id],
+    }).onDelete("cascade"),
+    index("knowledge_chunks_business_idx").on(t.businessId),
+  ],
+);
+
+// Real past replies from the shop's team. The most similar ones are shown to
+// the model as style examples, so it answers the way this shop does.
+export const toneExamples = pgTable(
+  "tone_examples",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    businessId: uuid("business_id")
+      .notNull()
+      .references(() => businesses.id, { onDelete: "cascade" }),
+    customerMessage: text("customer_message").notNull(),
+    reply: text("reply").notNull(),
+    // Filled in by indexing; null means not yet searchable.
+    embedding: vector("embedding", { dimensions: EMBEDDING_DIMENSIONS }),
+    embeddingModel: text("embedding_model"),
+    createdAt: createdAt(),
+  },
+  (t) => [index("tone_examples_business_idx").on(t.businessId)],
 );
