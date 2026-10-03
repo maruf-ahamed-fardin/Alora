@@ -13,6 +13,8 @@ export interface Embedder {
   embedPassages(texts: string[]): Promise<number[][]>;
   /** For what the customer typed. */
   embedQuery(text: string): Promise<number[]>;
+  /** Several short texts compared with each other, like past customer messages. */
+  embedQueries(texts: string[]): Promise<number[][]>;
 }
 
 const MODEL_ID = "Xenova/multilingual-e5-small";
@@ -31,6 +33,10 @@ export class LocalE5Embedder implements Embedder {
   async embedQuery(text: string) {
     const [vector] = await this.embed([`query: ${text}`]);
     return vector;
+  }
+
+  async embedQueries(texts: string[]) {
+    return this.embed(texts.map((t) => `query: ${t}`));
   }
 
   private async embed(texts: string[]): Promise<number[][]> {

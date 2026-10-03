@@ -6,6 +6,7 @@ import {
   customers,
   knowledgeDocuments,
   products,
+  toneExamples,
 } from "../src/db/schema";
 
 // One demo business for local work. Safe to re-run: it replaces itself.
@@ -136,7 +137,25 @@ await db.transaction(async (tx) => {
         "শনিবার থেকে বৃহস্পতিবার সকাল ১০টা থেকে রাত ১০টা। শুক্রবার বিকাল ৩টা থেকে রাত ১০টা। Hotline: 01XXXXXXXXX।",
     },
   ]);
+
+  // How this shop's team actually talks. Embeddings are filled in by kb:index.
+  await tx.insert(toneExamples).values(
+    [
+      ["hi", "Hello 😊 bolen, kibhabe help korte pari?"],
+      ["ভাই অর্ডার করতে চাই", "জি, অবশ্যই 😊 কোন product আর কোন size লাগবে একটু বলবেন?"],
+      ["thanks", "Welcome 😊 aro kichu lagle janaben."],
+      ["delivery koto din lagbe?", "Dhakar moddhe 2-3 din, baire 3-5 din lage 😊"],
+      ["price ta ektu kom hobe?", "Sorry, price fixed 🙏 tobe 3000 takar upore order korle Dhaka te delivery free."],
+      ["আমার পণ্য এখনো পাই নি", "দুঃখিত 🙏 আপনার order নাম্বারটা একটু দেবেন? আমি এখনই দেখছি।"],
+      ["ami exchange korte chai", "Thik ache 😊 product ta ki use kora hoyeche? Tag lagano thakle exchange kora jabe."],
+      ["bkash number ta den", "Ei number e pathan 😊 01XXXXXXXXX (personal). Pathaye TrxID ta janaben."],
+    ].map(([customerMessage, reply]) => ({
+      businessId: business.id,
+      customerMessage,
+      reply,
+    })),
+  );
 });
 
 await closeDb();
-console.log(`Seeded business "${TEST_BUSINESS_SLUG}" with 5 products and 5 knowledge documents.`);
+console.log(`Seeded business "${TEST_BUSINESS_SLUG}" with 5 products, 5 knowledge documents and 8 tone examples.`);
