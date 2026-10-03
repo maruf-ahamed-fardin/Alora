@@ -6,7 +6,12 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "tsx scripts/db-migrate.mts",
+    "db:seed": "tsx scripts/db-seed.mts",
+    "db:check": "tsx scripts/db-check.mts",
+    "db:reset": "tsx scripts/db-reset.mts && npm run db:migrate && npm run db:seed"
   },
   "dependencies": {
     "@electric-sql/pglite": "^0.5.8",

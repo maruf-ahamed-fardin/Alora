@@ -1,3 +1,4 @@
+import { mkdirSync } from "node:fs";
 import path from "node:path";
 import { PGlite } from "@electric-sql/pglite";
 import { vector } from "@electric-sql/pglite-pgvector";
@@ -24,6 +25,8 @@ function makeDb(pg: PGlite) {
 const globalForDb = globalThis as unknown as { __aloraDb?: Store };
 
 function open(): Store {
+  // PGlite does not create missing parent folders.
+  mkdirSync(dataDir, { recursive: true });
   const pg = new PGlite(dataDir, { extensions: { vector } });
   return { pg, db: makeDb(pg) };
 }
