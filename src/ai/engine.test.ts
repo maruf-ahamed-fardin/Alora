@@ -33,13 +33,15 @@ class FakeModel implements ChatModel {
   calls: ModelRequest[] = [];
   constructor(private answers: (string | Error)[]) {}
   async reply(request: ModelRequest) {
-    this.calls.push(structuredClone(request));
+    // Tools hold functions, which cannot be cloned; tests of them live elsewhere.
+    this.calls.push(structuredClone({ ...request, tools: undefined }));
     const next = this.answers.shift() ?? "ok";
     if (next instanceof Error) throw next;
     return {
       text: next,
       model: "fake-model",
       usage: { inputTokens: 10, outputTokens: 5, cacheReadTokens: 0 },
+      toolCalls: [],
     };
   }
 }
