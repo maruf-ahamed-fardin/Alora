@@ -15,6 +15,51 @@ Entry er format:
 
 ---
 
+## D4 — Tools (2026-10-04) — code ready, live check baki
+
+**Ki kora holo:** AI ekhon dam, stock, delivery charge ar order er status **nijer thekei na bole database theke dekhe** bole. Customer "white tshirt L size ache?" likhle AI database dekhe bole L sold out, M ar XL ache. "ORD-1001 kothay?" likhle shudhu **oi customer er nijer** order dekhay; onno customer er order number dile "paoa jay ni" bole. Customer rege gele ba refund chaile AI `handoff_to_agent` diye chat team ke diye dey ar nije chup hoye jay.
+
+**Ja verify kora holo ar ja holo na:**
+- Pass: 97 ta test (95 pass, 2 ashol embedding model er test default e skip), `tsc`, lint, `next build`, `db:check` (11 table).
+- Pass: dev server + ashol embedder + **fake Claude** (`ANTHROPIC_BASE_URL` diye) diye `/api/playground`: black tshirt -> price 1300 ar stock; white L -> sold out; Sylhet -> 120 taka; ORD-1001 -> shipped, Pathao; ORD-2001 (onno customer er) -> paoa gelo na; refund -> handoff, tarpor "hello?" te AI chup.
+- **Holo na:** ashol Claude er tool bebohar. API key nai, tai "kon tool kokhon dhore", "dam na jene bole dey ki na", "handoff khub tara tari dey ki na" amra jani na. Eta D5 tuning er kaj.
+
+**Kivabe kora holo:**
+- **Tool = ekta function + description + input schema.** Model ke tool er list dewa hoy. Model "get_product(black tshirt)" chay, amra database e chalai, result model ke ferot dei, model tokhon uttor likhe. Eta ekta loop (maximum 5 round).
+- **Keno tool, keno prompt e na:** dam/stock proti ghontay bodlay. Prompt e likhle cache nosto hoy ar purono dam thake. Tool shobshomoy ajker data dey.
+- **Security:** `business_id` ar `customer_id` model er input theke ashe na, conversation theke ashe (`ToolContext`). Model ja-i likhuk, onno shop ba onno customer er data dekhte pare na. Order na pele "paoa jay ni" ei ek-i uttor, tai order number guess kore dekhar upay nai.
+- **Tool fail korle:** bhul input / unknown tool / database error model ke error hishebe dewa hoy (details na), customer er message fail hoy na.
+- **`get_product` search:** name, SKU, colour er upor; "T-shirt" / "tshirt" / "t shirt" shob ek. 3 okkhorer choto shobdo ("er", "ta") dhora hoy na. Catalogue choto tai memory te filter kora; boro hole SQL search lagbe.
+- **`get_delivery_charge`:** `delivery_zones` table e zone er keyword ("dhaka", "ঢাকা", "dhanmondi") theke area mele; na mille default zone ("Outside Dhaka") ar bole je eta ashumed rate. 3000 takar *upore* free (3000 porjonto na). Seed e Delivery document er shathe mil rakha ache.
+- **`handoff_to_agent`:** `conversations.status = handoff`, `ai_enabled = false`, ar team er jonno ekta `system` note. Duibar dile duita note hoy na.
+- Model interface (`ChatModel`) e `tools` jog hoyeche, tai D15 e onno model e eki tool dewa jabe.
+
+**6 ta PR:** (1) schema (2) seed (3) tools (4) model tool loop (5) engine + prompt + playground (6) docs.
+
+**Kon file:**
+- `src/ai/tools/` — `types.ts`, `catalog.ts` (get_product, check_stock), `delivery.ts`, `orders.ts`, `handoff.ts`, `index.ts`
+- `src/ai/anthropic.ts` (tool loop), `src/ai/model.ts`, `src/ai/engine.ts`, `src/ai/prompt.ts`
+- `src/db/schema.ts`, `drizzle/0003_delivery_and_orders.sql`, `scripts/db-seed.mts`
+- `src/app/playground/page.tsx`
+
+**Kivabe check korben:**
+1. `npm run db:reset` (dev server bondho rekhe), tarpor `npm run db:check` ar `npm test`.
+2. API key boshiye `npm run dev`, `/playground` e (reply er niche "tools: ..." dekhabe):
+   - "white tshirt L size ache?" -> L nai, M / XL ache bolbe.
+   - "navy hoodie ache?" -> sold out bolbe, dam banabe na.
+   - "sylhet e delivery charge koto?" -> ১২০ taka, ৩-৫ din.
+   - "ORD-1001 kothay?" -> shipped, Pathao, tracking PT-884213.
+   - "ORD-2001 kothay?" -> paoa jay ni bolbe (eta onno customer er order).
+   - "refund chai" -> team nibe bolbe, tarpor chat e system note ashbe ar AI ar reply dibe na. "Start over" dile abar kaj kore.
+3. Dam bodlate chaile `scripts/db-seed.mts` e dam bodle `npm run db:reset` korun; AI notun dam bolbe (kono prompt bodlate hobe na).
+
+**Ja baki / janar moto:**
+- Order placing/cancel tool nai (shudhu dekha). Order chaile AI details nei ar handoff kore; eta D5 e dekhte hobe apnar pochhondo hoy ki na.
+- Handoff er por AI chup; team jokhon uttor debe sheta inbox (D6) e hobe. Ekhon playground e "Start over" chhara fire asha jay na.
+- Stock er exact number shudhu 3 ba kom thakle bolar kotha prompt e likha; eta tuning er bishoy.
+
+---
+
 ## D3 — Knowledge + tone (2026-10-03) — code ready, live check baki
 
 **Ki kora holo:** AI ekhon shop er nijer tothyo (delivery, payment, return, size guide, business hours) theke uttor dey, ar shop er team er purono reply dekhe shei tone e kotha bole. Shop owner browser e `/playground/knowledge` e tothyo add / edit / delete korte pare, ar change ta porer message e-i kaj kore. D3 8 ta alada PR-e bhag kora, prottek ta ekta nijosso dhap.
