@@ -20,7 +20,7 @@ Open http://localhost:3000
 2. Create `.env.local` (copy `.env.example`) and set `ANTHROPIC_API_KEY=...`.
 3. `npm run dev`, then open http://localhost:3000/playground and chat as a customer.
 
-`npm test` runs the tests; they need no key.
+`npm test` runs the tests; they need no key. Shop information and past replies are managed at http://localhost:3000/playground/knowledge.
 
 ## Database (local)
 
@@ -28,10 +28,12 @@ Local development uses PGlite (PostgreSQL 18 in WASM, pgvector included). Nothin
 
 | Command | What it does |
 |---|---|
-| `npm run db:reset` | Delete the local database, then migrate and seed from scratch |
+| `npm run db:reset` | Delete the local database, then migrate, seed and index from scratch (the first run downloads the ~120 MB search model) |
 | `npm run db:migrate` | Apply migrations from `drizzle/` |
 | `npm run db:seed` | Reload the demo shop (safe to re-run) |
 | `npm run db:check` | Health check: tables, pgvector, seed data, tenant isolation |
+| `npm run kb:index` | Re-embed all shop information and past replies |
+| `npm run kb:eval` | Measure whether search finds the right document for real questions |
 | `npm run db:generate` | After editing `src/db/schema.ts`, generate a new migration |
 
 PGlite allows one process at a time: stop `npm run dev` before running a `db:*` command.

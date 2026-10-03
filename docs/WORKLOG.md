@@ -15,6 +15,58 @@ Entry er format:
 
 ---
 
+## D3 — Knowledge + tone (2026-10-03) — code ready, live check baki
+
+**Ki kora holo:** AI ekhon shop er nijer tothyo (delivery, payment, return, size guide, business hours) theke uttor dey, ar shop er team er purono reply dekhe shei tone e kotha bole. Shop owner browser e `/playground/knowledge` e tothyo add / edit / delete korte pare, ar change ta porer message e-i kaj kore. D3 8 ta alada PR-e bhag kora, prottek ta ekta nijosso dhap.
+
+**Ja verify kora holo ar ja holo na:**
+- Pass: 61 ta test, `tsc`, lint, `next build`, `db:check`, `kb:eval`.
+- **Ashol embedding model diye** search quality maapa: `npm run kb:eval`, 29 ta proshno (Bangla, Banglish, English):
+
+| Bhasha | Thik document sobar upore | Top-3 te thik document |
+|---|---|---|
+| Bangla | 8/9 (89%) | 9/9 (100%) |
+| Banglish | 11/14 (79%) | 13/14 (93%) |
+| English | 4/6 (67%) | 6/6 (100%) |
+| **Sob** | **23/29 (79%)** | **28/29 (97%)** |
+
+  Model top-3 chunk dekhe, tai top-3 ta ashol maap; 90% er niche gele `kb:eval` fail kore. Ekta miss: `kotodin e pabo product ta`. Delivery related proshno gulo prai top-1 e Payment/Return er pichone porche, kintu top-3 e thake.
+- Pass: dev server + ashol embedder + **fake Claude** diye end-to-end: Banglish proshno → 3 chunk + 3 tone example context e jay (prompt-er cache kora ongsho theke alada block e). Notun document add korar por-i chat e context e ashe.
+- **Holo na:** Claude er ashol uttor. API key nai. Tai "model ta context ta thikmoto bebohar kore ki na", "tone ta manusher moto lage ki na" amra jani na.
+
+**Kivabe kora holo:**
+- **Embedding:** `Xenova/multilingual-e5-small` (Hugging Face transformers.js), nijer machine e. Prothom bar ~25 sec e load hoy ar ~120 MB download hoy `.data/models` e. `Embedder` interface er pichone.
+- **Chunk:** document ke `।` / `.` / `?` te bhag kore ≤600 char er tukro; prottek tukro r age document er title (jate "৬০ টাকা" jane eta delivery niye).
+- **Tone example:** customer er message embed kora; notun message er sathe sobcheye mil 3 ta purono reply model ke dekhano hoy "style only, fact na" bole.
+- **Query:** customer er shesh message; khub choto hole ("L", "dam?") ager customer message sathe jora.
+- **Prompt:** stable prompt cache hoy. Prottek message e je tothyo ashe seta alada system block e, cache-er pore, tai cache nosto hoy na ar customer seta edit korte pare na.
+- **Retrieval fail korle:** customer reply paay, model ke bola hoy "kichu milena", tai se "team confirm korbe" bole.
+- Notun table: `knowledge_chunks` (vector 384), `tone_examples`. pgvector extension ekhon migration e.
+
+**8 ta PR:** (1) schema (2) chunker (3) embedder (4) indexing (5) search + eval (6) prompt context (7) engine e jora (8) knowledge UI + docs.
+
+**Kon file:**
+- `src/knowledge/` — `chunker.ts`, `embedder.ts`, `indexing.ts`, `retrieval.ts`, `eval-cases.ts`, `testing.ts`
+- `src/ai/context.ts`, `src/ai/engine.ts`, `src/ai/prompt.ts`
+- `src/server/knowledge.ts`, `src/app/api/knowledge/route.ts`, `src/app/playground/knowledge/page.tsx`
+- `scripts/kb-index.mts`, `scripts/kb-eval.mts`
+
+**Kivabe check korben:**
+1. `npm run db:reset` (database + index; prothom bar model download hobe)
+2. `npm run kb:eval` — ekhon search er maap dekhabe
+3. API key boshiye `npm run dev`, `/playground` e "vai delivery charge koto?" likhun. Reply te ৬০ / ১২০ taka ashbe, ar reply er niche "looked at: Delivery, ..." dekhabe.
+4. `/playground/knowledge` e nijer ekta notun tothyo add korun, tarpor chat e oi bishoy e jiggesh korun.
+5. Jeta document e nai (jemon "gift wrap ache?") seta jiggesh korun: team confirm korbe bolbe, banabe na.
+
+**Ja janar moto:**
+- **Banglish e top-1 durbol (79%).** Ekhon 3 ta chunk dewa hoy tai chole; document onek hole (hajar) kharap hobe. Tokhon upay: boro model (BGE-M3 / Voyage / Cohere), ba keyword-matching jora. `kb:eval` e case jog kore maapa jay.
+- **Dam / stock ekhono nai** (D4 tools). Knowledge e dam likhle model dam bolbe, kintu dam bodlale document o bodlate hobe; eta hocche D4 er karon.
+- **Prothom save ~30 sec** lagte pare (model load).
+- Login nai (D8), tai knowledge page jar kache URL ache she-i dekhte pare. Ekhon sudhu local e.
+- Production (D9) e local embedding model er jonno server-e onek RAM lagte pare (ami maapi ni); na parle hosted embedding e jete hobe.
+
+---
+
 ## D2 — AI engine v1 + local test playground (2026-10-03) — code ready, live check baki
 
 **Ki kora holo:** Customer-er message niye AI reply banay emon engine, ar browser e ekta test chat (`/playground`), login chara. Customer Bangla, Banglish ba English je script e likhbe, AI shei script e, choto choto bubble e reply dibe ar ager kotha mone rakhbe.

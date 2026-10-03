@@ -3,7 +3,7 @@
 > **Alora** ("Alap" theke inspired): ekta multi-business SaaS. WhatsApp, Messenger, Instagram, Telegram (pore X) er customer message ek jaygay ashbe, ar AI Bangla / Banglish / English e manusher moto reply dibe.
 
 **Plan toiri:** 2026-10-03 (eki din e ekbar bodlano: login Stage D te, reply approval gate jog)
-**Ekhon kon destination:** `D2` code toiri, **apnar API key diye live reply check baki** (nicher D2 dekhun). Tarpor review dilei D3.
+**Ekhon kon destination:** `D3` code toiri (8 ta PR-e), `D2` ar `D3` duitai **apnar API key diye live reply check** baki. Retrieval ashol model diye verify kora (top-3 e 97%).
 
 ---
 
@@ -73,10 +73,11 @@ Protita table e `business_id` thakbe (multi-tenant), login na thakleo. Local e e
 - **Status:** code, test (24 ta) ar fake-server end-to-end pass. **Ashol Claude-er reply ekhono dekha hoy ni**, karon API key nai. Key boshiye `/playground` e try korle `[x]` hobe.
 - **Age lagbe:** *Open decision 1* (kon model): hosted Claude default dhora hoyeche.
 
-#### [ ] D3 — Knowledge + tone "training"
+#### [~] D3 — Knowledge + tone "training"
 - **Ki hobe:** FAQ / policy / business info upload, embedding + pgvector search (RAG), tone example (purono bhalo reply) jog kora.
 - **Shesh mane:** Upload kora delivery policy niye proshno korle shothik uttor dey; na janle banay na, "check kore janacchi" bole.
-- **Age lagbe:** *Open decision 3* (embedding model).
+- **Status:** Search ashol model diye verify kora: 29 ta proshne shothik document top-3 e **97%** (top-1 e 79%). Upload page, edit, delete, tenant isolation, 61 ta test pass. **Ashol Claude er shothik uttor dekha hoy ni** (API key nai); key boshiye `/playground` e "delivery charge koto?" likhe dekhle `[x]` hobe.
+- **Embedding model:** nijer machine e chole (key lage na), `multilingual-e5-small`, 384 dimension. Swappable.
 
 #### [ ] D4 — Tools (real-time data)
 - **Ki hobe:** Tools: `get_product`, `check_stock`, `get_delivery_charge`, `get_order`, `handoff_to_agent`.
@@ -149,6 +150,6 @@ Protita table e `business_id` thakbe (multi-tenant), login na thakleo. Local e e
 |---|---|---|---|
 | 1 | AI engine hosted model (paid API, recommended: Claude Opus 5.5; kom khoroche Sonnet 5.5 / Haiku 4.5) diye shuru, naki shudhu free / self-hosted? | D2 er age | Hosted Claude dhora hoyeche (user D2 shuru korte bolechhe). User ke API key dite hobe. Model `AI_MODEL` env diye bodlano jay. |
 | 2 | Hosting kothay (server, database)? | D9 er age | Baki |
-| 3 | Embedding model kon ta (Voyage / Cohere multilingual, ba self-hosted BGE-M3)? | D3 er age | Baki |
+| 3 | Embedding model kon ta (Voyage / Cohere multilingual, ba self-hosted BGE-M3)? | D3 er age | Local `multilingual-e5-small` diye shuru (key lage na, ~120 MB, ekbar download). `Embedder` interface er pichone, tai Voyage / Cohere / BGE-M3 pore boshano jay; vector size bodlale migration + re-index lagbe. Banglish e weak (top-1 e), kb:eval e dekha jay. |
 
 Engine **model-swappable** kore banano hobe, jate decision 1 pore bodlano jay.
