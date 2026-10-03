@@ -15,6 +15,43 @@ Entry er format:
 
 ---
 
+## D1 — Database, login chara (2026-10-03)
+
+**Ki kora holo:** Local database toiri holo: 7 ta table, migration, ekta demo business (seed), ar ekta health check. Shob kichu ek command e cholе: `npm run db:reset`. Login nai (D8 e).
+
+**Kivabe kora holo:**
+- **PGlite, Docker na:** apnar computer e na PostgreSQL na Docker chilo. System e boro software install na kore PGlite use kora holo: eta asholei PostgreSQL 18 (WASM e), Node er vitore cholе, data thake `.data/pglite` folder e. pgvector (D3 er RAG er jonno) o kaj kore, test kora. Schema standard Postgres, tai D9 e hosted PostgreSQL e shorashori jabe, shudhu `src/db/client.ts` e driver bodlate hobe.
+- **Drizzle ORM:** schema TypeScript e lekha (`src/db/schema.ts`), `drizzle-kit generate` SQL migration banay (`drizzle/0000_init.sql`).
+- **Tenant safety database er level e:** protita table e `business_id`. Child table (conversation, message, customer) parent ke `(business_id, id)` composite foreign key diye dhore, tai bhul kore onno business er customer / conversation e jora lagano database nijei reject kore, code e bhul hole-o.
+- **Webhook retry safe:** `messages` e `(conversation_id, external_id)` unique, tai Meta / Telegram eki message duibar pathale duibar save hobe na.
+- Script gulo `.mts`, karon project CommonJS ar script e top-level `await` lage.
+
+**Table gulo:** `businesses` (nam, tone_notes), `channels` (playground / telegram / messenger / instagram / whatsapp / x / web), `customers`, `conversations` (status open/handoff/closed, ai_enabled), `messages` (sender: customer/ai/agent/system), `products` (dam numeric, stock, attributes jsonb e size-wise stock), `knowledge_documents` (FAQ, policy, delivery, payment, about).
+
+**Demo business `demo-shop`:** 5 product (Black T-shirt ৳1300, White T-shirt ৳1250 jar L size shesh, Red Polo ৳1650, Denim Jeans ৳2100, Navy Hoodie ৳2400 jar stock 0), 5 knowledge document (delivery: Dhaka ৳60 / baire ৳120, payment: COD + bKash / Nagad, return: 7 din, size guide, business hours), ekta playground channel, ekta "Local Tester" customer. Kichu product ichchhe kore out of stock rakha, jate D2–D4 e dekhi AI stock banay kina.
+
+**Kon file:**
+- `src/db/schema.ts` — shob table
+- `src/db/client.ts` — database connection
+- `drizzle/0000_init.sql` — generated migration
+- `scripts/db-migrate.mts`, `db-seed.mts`, `db-reset.mts`, `db-check.mts`
+- `drizzle.config.ts`, `README.md`, `.env.example`
+
+**Kivabe check korben:**
+1. `npm run db:reset` (naya kore database toiri + seed)
+2. `npm run db:check` — 12 ta PASS dekhabe, "All checks passed." Er moddhe tenant isolation test o ache (onno business er sathe jorar chesta fail hoy).
+3. Dev server bondho rekhe cholan (PGlite ekbar ek process).
+
+**Ja baki / janar moto:**
+- **Ekbar ek process:** `npm run dev` cholar shomoy `db:*` command chalaben na. Production e (real Postgres) ei shimabodhota thakbe na.
+- **Per-size stock:** ekhon `products.attributes.sizes` e rakha (jemon `{M:5, L:4}`). D4 te dekhbo alada `product_variants` table lagbe kina.
+- **Embedding table nai:** D3 te, embedding model (Open decision 3) thik hole.
+- **Credentials:** `channels.credentials` e token D10 theke ashbe; ager aage encrypt korar babostha lagbe.
+- **npm audit** warning ekhono ache (D0 theke), production er age dekhbo.
+- D2 shuru korar age **Open decision 1** lagbe: AI model hosted paid API (recommended) naki free / self-hosted? Hosted hole API key lagbe.
+
+---
+
 ## D0 — Project setup (2026-10-03)
 
 **Ki kora holo:** Next.js (16.3.8) + React 19 + TypeScript + Tailwind v4 project toiri holo. Home page e shudhu "Alora" ar tagline dekhay. Lint ar production build pass kore.

@@ -20,6 +20,7 @@ Multi-business SaaS: an omnichannel AI customer-support chatbot (WhatsApp, Messe
 
 - Stack: Next.js + TypeScript + Tailwind (PWA), Node backend, PostgreSQL + pgvector, Redis queue, WebSocket. Python only for the fine-tuning experiment (D15).
 - Multi-tenant from day one: every tenant-owned table carries `business_id`, even before login exists (login arrives in D8).
+- Local database is PGlite (PostgreSQL 18 + pgvector in WASM, folder `.data/pglite`, nothing installed). Commands: `npm run db:reset | db:migrate | db:seed | db:check | db:generate`. PGlite is single-process: stop `npm run dev` before running a `db:*` command. Schema is in `src/db/schema.ts`; change it, then `npm run db:generate`. Scripts are `.mts` (project is CommonJS, scripts use top-level await). The demo business slug is `demo-shop`.
 - Prices, stock and policies come from the database / tools at reply time, never from model training.
 - The AI engine is model-swappable (hosted model first, fine-tuned model compared later on the same evaluation set).
 

@@ -3,7 +3,7 @@
 > **Alora** ("Alap" theke inspired): ekta multi-business SaaS. WhatsApp, Messenger, Instagram, Telegram (pore X) er customer message ek jaygay ashbe, ar AI Bangla / Banglish / English e manusher moto reply dibe.
 
 **Plan toiri:** 2026-10-03 (eki din e ekbar bodlano: login Stage D te, reply approval gate jog)
-**Ekhon kon destination:** `D0` shesh, review-er opekkhay. Porer: `D1` (user "porer ta koro" bolle)
+**Ekhon kon destination:** `D1` shesh, review-er opekkhay. Porer: `D2` (user "porer ta koro" bolle; age Open decision 1 lagbe)
 
 ---
 
@@ -61,8 +61,8 @@ Protita table e `business_id` thakbe (multi-tenant), login na thakleo. Local e e
 - **Ki hobe:** Next.js + TypeScript + Tailwind project, folder structure, git init, env file er niyom.
 - **Shesh mane:** `npm run dev` dile browser e Alora er ekta khali home page ashe.
 
-#### [ ] D1 — Database (login chara)
-- **Ki hobe:** Local PostgreSQL, schema (businesses, customers, conversations, messages, products, knowledge), ar ekta seeded "test business". Login / signup ekhane nai.
+#### [x] D1 — Database (login chara)
+- **Ki hobe:** Local PostgreSQL (PGlite, kichu install lage na), schema (businesses, channels, customers, conversations, messages, products, knowledge_documents), ar ekta seeded demo business. Login / signup ekhane nai.
 - **Shesh mane:** Ek command e database toiri hoy ar test business er data dekha jay.
 
 ### Stage B — AI er matha (local, reply mon moto kora)
@@ -104,7 +104,7 @@ Protita table e `business_id` thakbe (multi-tenant), login na thakleo. Local e e
 - **Shesh mane:** Signup kore login kora jay; ek business onno business er data dekhte pay na.
 
 #### [ ] D9 — Production deploy
-- **Ki hobe:** Server + database hosting, domain, HTTPS, secret / env setup, public webhook URL.
+- **Ki hobe:** Server + database hosting, domain, HTTPS, secret / env setup, public webhook URL. Local PGlite theke hosted PostgreSQL (pgvector shoho) e switch: `src/db/client.ts` e driver bodlano, schema ar migration eki thakbe.
 - **Shesh mane:** Live URL e login kore playground e reply paowa jay.
 - **Age lagbe:** *Open decision 2* (hosting).
 
