@@ -11,6 +11,7 @@ import {
   text,
   timestamp,
   unique,
+  uniqueIndex,
   uuid,
   vector,
 } from "drizzle-orm/pg-core";
@@ -282,4 +283,80 @@ export const toneExamples = pgTable(
     createdAt: createdAt(),
   },
   (t) => [index("tone_examples_business_idx").on(t.businessId)],
+);
+
+// Where the shop delivers and what it charges. The AI quotes these through the
+// get_delivery_charge tool, so a changed charge reaches customers at once.
+export const deliveryZones = pgTable(
+  "delivery_zones",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    businessId: uuid("business_id")
+      .notNull()
+      .references(() => businesses.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    // Lower-case words that put an address in this zone, e.g. ["dhaka", "ঢাকা"].
+    keywords: jsonb("keywords").notNull().default(sql`'[]'::jsonb`),
+    // The zone used when no keyword matches ("outside Dhaka"). One per business.
+    isDefault: boolean("is_default").notNull().default(false),
+    charge: numeric("charge", { precision: 12, scale: 2 }).notNull(),
+    minDays: integer("min_days").notNull(),
+    maxDays: integer("max_days").notNull(),
+    // Orders above this amount ship free in this zone; null means never free.
+    freeAbove: numeric("free_above", { precision: 12, scale: 2 }),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    unique("delivery_zones_business_name_key").on(t.businessId, t.name),
+    index("delivery_zones_business_idx").on(t.businessId),
+    // At most one default zone per business.
+    uniqueIndex("delivery_zones_one_default_idx")
+      .on(t.businessId)
+      .where(sql`${t.isDefault}`),
+  ],
+);
+
+export const orderStatus = pgEnum("order_status", [
+  "pending",
+  "confirmed",
+  "shipped",
+  "delivered",
+  "cancelled",
+  "returned",
+]);
+
+export const orders = pgTable(
+  "orders",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    businessId: uuid("business_id")
+      .notNull()
+      .references(() => businesses.id, { onDelete: "cascade" }),
+    // The number the customer quotes, e.g. "ORD-1001". Unique per business.
+    orderNumber: text("order_number").notNull(),
+    // Whose order it is. The AI only shows an order to the customer it belongs to.
+    customerId: uuid("customer_id").notNull(),
+    status: orderStatus("status").notNull().default("pending"),
+    // [{ name, sku, size, quantity, unitPrice }]
+    items: jsonb("items").notNull().default(sql`'[]'::jsonb`),
+    subtotal: numeric("subtotal", { precision: 12, scale: 2 }).notNull(),
+    deliveryCharge: numeric("delivery_charge", { precision: 12, scale: 2 })
+      .notNull()
+      .default("0"),
+    total: numeric("total", { precision: 12, scale: 2 }).notNull(),
+    shippingAddress: text("shipping_address"),
+    courier: text("courier"),
+    trackingCode: text("tracking_code"),
+    placedAt: timestamp("placed_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    unique("orders_business_number_key").on(t.businessId, t.orderNumber),
+    foreignKey({
+      name: "orders_customer_fk",
+      columns: [t.businessId, t.customerId],
+      foreignColumns: [customers.businessId, customers.id],
+    }).onDelete("cascade"),
+    index("orders_customer_idx").on(t.customerId, t.placedAt),
+  ],
 );
