@@ -45,15 +45,17 @@ export class AnthropicChatModel implements ChatModel {
     this.maxTokens = options.maxTokens ?? 4000;
   }
 
-  async reply({ system, messages }: ModelRequest): Promise<ModelResponse> {
+  async reply({ system, context, messages }: ModelRequest): Promise<ModelResponse> {
     const useFallback = FALLBACK_MODELS.has(this.model);
 
     const response = await this.client.beta.messages.create({
       model: this.model,
       max_tokens: this.maxTokens,
-      // The system prompt is the stable prefix; cache it across turns.
+      // The stable prompt is cached across turns. The per-message context sits
+      // after the cache breakpoint, so changing it does not invalidate the cache.
       system: [
         { type: "text", text: system, cache_control: { type: "ephemeral" } },
+        ...(context ? [{ type: "text" as const, text: context }] : []),
       ],
       messages,
       ...(this.effort ? { output_config: { effort: this.effort } } : {}),

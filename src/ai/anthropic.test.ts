@@ -89,6 +89,22 @@ test("sends the expected request and maps the response", async () => {
   assert.match(String(headers["anthropic-beta"]), /server-side-fallback-2026-07-01/);
 });
 
+test("per-message context is a second system block outside the cached one", async () => {
+  nextResponse = message();
+  const model = new AnthropicChatModel({ client: client() });
+
+  await model.reply({
+    system: "STABLE",
+    context: "## Shop information\n- Delivery: 60 taka",
+    messages: [{ role: "user", content: "delivery koto?" }],
+  });
+
+  assert.deepEqual(captured!.body.system, [
+    { type: "text", text: "STABLE", cache_control: { type: "ephemeral" } },
+    { type: "text", text: "## Shop information\n- Delivery: 60 taka" },
+  ]);
+});
+
 test("Haiku gets no effort setting and no fallbacks", async () => {
   nextResponse = message({ model: "claude-haiku-4-5" });
   const model = new AnthropicChatModel({

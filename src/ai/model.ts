@@ -4,7 +4,10 @@
 export type ChatMessage = { role: "user" | "assistant"; content: string };
 
 export type ModelRequest = {
+  /** The stable prompt for this business (cached between turns). */
   system: string;
+  /** What changes per message: matching shop records and style examples. */
+  context?: string;
   messages: ChatMessage[];
 };
 
