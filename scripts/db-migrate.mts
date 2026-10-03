@@ -1,7 +1,8 @@
 import { migrate } from "drizzle-orm/pglite/migrator";
-import { db, pg, dataDir } from "../src/db/client";
+import { closeDb, getDb, getPg, getDataDir } from "../src/db/client";
 
-await pg.exec("CREATE EXTENSION IF NOT EXISTS vector");
+const db = getDb();
+await getPg().exec("CREATE EXTENSION IF NOT EXISTS vector");
 await migrate(db, { migrationsFolder: "./drizzle" });
-await pg.close();
-console.log(`Migrations applied. Database: ${dataDir}`);
+await closeDb();
+console.log(`Migrations applied. Database: ${getDataDir()}`);

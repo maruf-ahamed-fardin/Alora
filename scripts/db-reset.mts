@@ -1,6 +1,6 @@
 import { rm } from "node:fs/promises";
-import { pg, dataDir } from "../src/db/client";
+import { getDataDir } from "../src/db/client";
 
-await pg.close();
+const dataDir = getDataDir();
 await rm(dataDir, { recursive: true, force: true });
 console.log(`Local database deleted: ${dataDir}`);

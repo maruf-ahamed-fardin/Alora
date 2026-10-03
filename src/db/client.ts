@@ -10,10 +10,12 @@ import * as schema from "./schema";
 // `npm run dev` before running the db:* scripts. Production (D9) switches to a
 // hosted PostgreSQL; the schema is plain Postgres + pgvector and moves as is.
 
-const dataDir = path.resolve(
-  process.cwd(),
-  process.env.DATABASE_DIR ?? ".data/pglite",
-);
+export function getDataDir() {
+  return path.resolve(
+    process.cwd(),
+    process.env.DATABASE_DIR ?? ".data/pglite",
+  );
+}
 
 type Store = { pg: PGlite; db: ReturnType<typeof makeDb> };
 
@@ -24,15 +26,26 @@ function makeDb(pg: PGlite) {
 // Next.js dev reloads modules often; keep a single database handle alive.
 const globalForDb = globalThis as unknown as { __aloraDb?: Store };
 
-function open(): Store {
-  // PGlite does not create missing parent folders.
-  mkdirSync(dataDir, { recursive: true });
-  const pg = new PGlite(dataDir, { extensions: { vector } });
-  return { pg, db: makeDb(pg) };
+// Opened on first use, never at import time: `next build` imports route
+// modules in several worker processes and they must not all open the folder.
+function store(): Store {
+  if (!globalForDb.__aloraDb) {
+    const dir = getDataDir();
+    // PGlite does not create missing parent folders.
+    mkdirSync(dir, { recursive: true });
+    const pg = new PGlite(dir, { extensions: { vector } });
+    globalForDb.__aloraDb = { pg, db: makeDb(pg) };
+  }
+  return globalForDb.__aloraDb;
 }
 
-const store = (globalForDb.__aloraDb ??= open());
+export const getDb = () => store().db;
+export const getPg = () => store().pg;
 
-export const pg = store.pg;
-export const db = store.db;
-export { dataDir };
+export async function closeDb() {
+  if (globalForDb.__aloraDb) {
+    const { pg } = globalForDb.__aloraDb;
+    globalForDb.__aloraDb = undefined;
+    await pg.close();
+  }
+}

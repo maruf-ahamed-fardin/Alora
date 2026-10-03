@@ -1,5 +1,5 @@
 import { and, eq, sql } from "drizzle-orm";
-import { db, pg } from "../src/db/client";
+import { closeDb, getDb, getPg } from "../src/db/client";
 import {
   businesses,
   channels,
@@ -12,6 +12,9 @@ import {
 
 // Health check for the local database. Every test that writes runs inside a
 // transaction that is rolled back, so the seeded data is never touched.
+
+const db = getDb();
+const pg = getPg();
 
 const ROLLBACK = Symbol("rollback");
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
@@ -196,6 +199,6 @@ if (demo) {
   }
 }
 
-await pg.close();
+await closeDb();
 console.log(failures === 0 ? "\nAll checks passed." : `\n${failures} check(s) FAILED.`);
 process.exit(failures === 0 ? 0 : 1);

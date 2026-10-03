@@ -1,5 +1,5 @@
 import { eq } from "drizzle-orm";
-import { db, pg } from "../src/db/client";
+import { closeDb, getDb } from "../src/db/client";
 import {
   businesses,
   channels,
@@ -13,6 +13,8 @@ import {
 // so the AI is tested against what real customers will ask.
 
 const TEST_BUSINESS_SLUG = "demo-shop";
+
+const db = getDb();
 
 await db.transaction(async (tx) => {
   // Cascades through every table that carries this business_id.
@@ -136,5 +138,5 @@ await db.transaction(async (tx) => {
   ]);
 });
 
-await pg.close();
+await closeDb();
 console.log(`Seeded business "${TEST_BUSINESS_SLUG}" with 5 products and 5 knowledge documents.`);
