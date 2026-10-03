@@ -10,8 +10,9 @@ import {
 } from "../knowledge/retrieval";
 import { splitIntoBubbles } from "./bubbles";
 import { buildContext } from "./context";
-import type { ChatMessage, ChatModel, ModelUsage } from "./model";
+import type { ChatMessage, ChatModel, ModelUsage, ToolCall } from "./model";
 import { buildSystemPrompt } from "./prompt";
+import { buildTools } from "./tools";
 
 const DEFAULT_HISTORY_LIMIT = 30;
 const KNOWLEDGE_HITS = 3;
@@ -28,6 +29,8 @@ export type ReplyResult = {
   usage: ModelUsage | null;
   /** What was looked up for this message (for the playground and evaluation). */
   retrieved: { knowledge: KnowledgeHit[]; examples: ToneHit[] };
+  /** Lookups and actions the model made to write the reply, in order. */
+  toolCalls: ToolCall[];
 };
 
 const nothingRetrieved = () => ({ knowledge: [], examples: [] });
@@ -60,6 +63,8 @@ type HandleMessage = {
   embedder?: Embedder;
   /** How many recent messages the model sees. Older ones are dropped. */
   historyLimit?: number;
+  /** Product, stock, delivery, order and handoff tools. On by default. */
+  useTools?: boolean;
 };
 
 /**
@@ -76,6 +81,7 @@ export async function handleCustomerMessage({
   model,
   embedder,
   historyLimit = DEFAULT_HISTORY_LIMIT,
+  useTools = true,
 }: HandleMessage): Promise<ReplyResult> {
   const db = getDb();
 
@@ -104,7 +110,13 @@ export async function handleCustomerMessage({
   await touch(conversationId);
 
   if (!conversation.aiEnabled) {
-    return { replies: [], model: null, usage: null, retrieved: nothingRetrieved() };
+    return {
+      replies: [],
+      model: null,
+      usage: null,
+      retrieved: nothingRetrieved(),
+      toolCalls: [],
+    };
   }
 
   const history = await loadHistory(businessId, conversationId, historyLimit);
@@ -119,6 +131,10 @@ export async function handleCustomerMessage({
       ? buildContext(retrieved.knowledge, retrieved.examples)
       : undefined,
     messages: history,
+    // Which shop and which customer comes from the conversation, not from the model.
+    tools: useTools
+      ? buildTools({ businessId, conversationId, customerId: conversation.customerId })
+      : undefined,
   });
 
   const bubbles = splitIntoBubbles(result.text);
@@ -140,6 +156,7 @@ export async function handleCustomerMessage({
                 model: result.model,
                 usage: result.usage,
                 sources: retrieved?.knowledge.map((k) => k.title) ?? [],
+                toolCalls: result.toolCalls,
               }
             : {},
       })),
@@ -156,6 +173,7 @@ export async function handleCustomerMessage({
     model: result.model,
     usage: result.usage,
     retrieved: retrieved ?? nothingRetrieved(),
+    toolCalls: result.toolCalls,
   };
 }
 
