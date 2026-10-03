@@ -5,9 +5,11 @@ import {
   channels,
   conversations,
   customers,
+  deliveryZones,
   knowledgeChunks,
   knowledgeDocuments,
   messages,
+  orders,
   products,
   toneExamples,
 } from "../src/db/schema";
@@ -55,8 +57,8 @@ const tables = await pg.query<{ table_name: string }>(
    order by table_name`,
 );
 report(
-  tables.rows.length === 9,
-  "9 tables exist",
+  tables.rows.length === 11,
+  "11 tables exist",
   tables.rows.map((r) => r.table_name).join(", "),
 );
 
@@ -235,6 +237,39 @@ if (demo) {
           sender: "customer",
           content: "leak?",
         });
+      },
+    );
+
+    await mustBeRejected(
+      "another business cannot attach an order to this business's customer",
+      async (tx) => {
+        const [other] = await tx
+          .insert(businesses)
+          .values({ slug: "other-shop", name: "Other Shop" })
+          .returning();
+        await tx.insert(orders).values({
+          businessId: other.id,
+          orderNumber: "ORD-LEAK",
+          customerId: customer.id,
+          subtotal: "1",
+          total: "1",
+        });
+      },
+    );
+
+    await mustBeRejected(
+      "a business cannot have two default delivery zones",
+      async (tx) => {
+        const zone = {
+          businessId: demo.id,
+          keywords: [],
+          isDefault: true,
+          charge: "100",
+          minDays: 1,
+          maxDays: 2,
+        };
+        await tx.insert(deliveryZones).values({ ...zone, name: "Probe A" });
+        await tx.insert(deliveryZones).values({ ...zone, name: "Probe B" });
       },
     );
 
