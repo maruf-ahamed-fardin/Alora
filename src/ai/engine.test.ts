@@ -132,6 +132,21 @@ test("a reply with --- becomes separate bubbles saved in order", async () => {
   ]);
 });
 
+test("bubbles and quick customer messages are merged into one turn each", async () => {
+  const conversationId = await newConversation();
+  const model = new FakeModel(["ji vai\n---\nkon size?", "ok"]);
+
+  await handleCustomerMessage({ businessId, conversationId, text: "black tshirt", model });
+  await new Promise((r) => setTimeout(r, 5));
+  await handleCustomerMessage({ businessId, conversationId, text: "L", model });
+
+  assert.deepEqual(model.calls[1].messages, [
+    { role: "user", content: "black tshirt" },
+    { role: "assistant", content: "ji vai\n---\nkon size?" },
+    { role: "user", content: "L" },
+  ]);
+});
+
 test("when AI is switched off the message is saved and the model is not called", async () => {
   const conversationId = await newConversation(false);
   const model = new FakeModel(["should not be used"]);

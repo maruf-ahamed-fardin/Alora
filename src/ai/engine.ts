@@ -136,13 +136,19 @@ async function loadHistory(
     .orderBy(desc(messages.createdAt), desc(messages.id))
     .limit(limit);
 
-  const thread: ChatMessage[] = recent
-    .reverse()
-    .filter((m) => m.sender !== "system")
-    .map((m) => ({
-      role: m.sender === "customer" ? "user" : "assistant",
-      content: m.content,
-    }));
+  const thread: ChatMessage[] = [];
+  for (const m of recent.reverse()) {
+    if (m.sender === "system") continue;
+    const role = m.sender === "customer" ? "user" : "assistant";
+    const last = thread[thread.length - 1];
+    if (last?.role === role) {
+      // Several bubbles in a row are one turn. Join the assistant's with the
+      // same --- separator it writes, so it keeps seeing its own format.
+      last.content += (role === "assistant" ? "\n---\n" : "\n") + m.content;
+    } else {
+      thread.push({ role, content: m.content });
+    }
+  }
 
   // A conversation must open with the customer; the window may start mid-thread.
   while (thread.length > 0 && thread[0].role !== "user") thread.shift();
