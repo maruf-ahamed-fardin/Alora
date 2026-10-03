@@ -18,6 +18,7 @@
     "@anthropic-ai/sdk": "^0.131.0",
     "@electric-sql/pglite": "^0.5.8",
     "@electric-sql/pglite-pgvector": "^0.0.9",
+    "@huggingface/transformers": "^4.3.0",
     "drizzle-orm": "^0.45.3",
     "next": "16.3.8",
     "react": "19.2.8",
