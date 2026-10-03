@@ -3,7 +3,7 @@
 > **Alora** ("Alap" theke inspired): ekta multi-business SaaS. WhatsApp, Messenger, Instagram, Telegram (pore X) er customer message ek jaygay ashbe, ar AI Bangla / Banglish / English e manusher moto reply dibe.
 
 **Plan toiri:** 2026-10-03 (eki din e ekbar bodlano: login Stage D te, reply approval gate jog)
-**Ekhon kon destination:** `D3` code toiri (8 ta PR-e), `D2` ar `D3` duitai **apnar API key diye live reply check** baki. Retrieval ashol model diye verify kora (top-3 e 97%).
+**Ekhon kon destination:** `D4` code toiri (6 ta PR-e), `D2`, `D3` ar `D4` tinti-i **apnar API key diye live reply check** baki. Tools ashol Claude chhara fake Claude server + ashol dev server diye end-to-end verify kora.
 
 ---
 
@@ -79,9 +79,11 @@ Protita table e `business_id` thakbe (multi-tenant), login na thakleo. Local e e
 - **Status:** Search ashol model diye verify kora: 29 ta proshne shothik document top-3 e **97%** (top-1 e 79%). Upload page, edit, delete, tenant isolation, 61 ta test pass. **Ashol Claude er shothik uttor dekha hoy ni** (API key nai); key boshiye `/playground` e "delivery charge koto?" likhe dekhle `[x]` hobe.
 - **Embedding model:** nijer machine e chole (key lage na), `multilingual-e5-small`, 384 dimension. Swappable.
 
-#### [ ] D4 — Tools (real-time data)
+#### [~] D4 — Tools (real-time data)
 - **Ki hobe:** Tools: `get_product`, `check_stock`, `get_delivery_charge`, `get_order`, `handoff_to_agent`.
 - **Shesh mane:** Dam / stock er uttor database theke ashe; database e na thakle AI nijer theke dam bole na.
+- **Status:** 5 ta tool, model er tool loop, prompt, playground e "tools: ..." dekha, 97 ta test (tools, loop, engine) pass. Fake Claude server diye ashol `/api/playground` e proti tool cholte dekha geche. **Ashol Claude kon tool kokhon dhore ta dekha hoy ni** (API key nai); key boshiye `/playground` e "white tshirt L size ache?" ityadi likhle `[x]` hobe.
+- **Notun table:** `delivery_zones` (charge, din, free-above), `orders` (customer er, status, courier, tracking).
 
 #### [ ] D5 — Reply tuning + user approval  ⛳ GATE
 - **Ki hobe:** User playground e nijer moto test korbe. Je reply pochhondo na, sheta mark kore "emon howa uchit chilo" likhbe; shei onujayi prompt, persona, tone example thik kora hobe. Chat rhythm (choto message, bhag kore pathano) ekhane thik hobe. 30–50 message er ekta choto test set rakha hobe jate ekta thik korte giye onno ta na bhange.
