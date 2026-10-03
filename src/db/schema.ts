@@ -1,0 +1,231 @@
+import { sql } from "drizzle-orm";
+import {
+  boolean,
+  foreignKey,
+  index,
+  integer,
+  jsonb,
+  numeric,
+  pgEnum,
+  pgTable,
+  text,
+  timestamp,
+  unique,
+  uuid,
+} from "drizzle-orm/pg-core";
+
+// Every tenant-owned table carries business_id. Child tables reference their
+// parents with a composite (business_id, id) foreign key, so the database
+// itself rejects a row that points at another business's data.
+
+export const channelType = pgEnum("channel_type", [
+  "playground",
+  "telegram",
+  "messenger",
+  "instagram",
+  "whatsapp",
+  "x",
+  "web",
+]);
+
+export const conversationStatus = pgEnum("conversation_status", [
+  "open",
+  "handoff",
+  "closed",
+]);
+
+export const senderType = pgEnum("sender_type", [
+  "customer",
+  "ai",
+  "agent",
+  "system",
+]);
+
+export const knowledgeKind = pgEnum("knowledge_kind", [
+  "about",
+  "faq",
+  "policy",
+  "delivery",
+  "payment",
+  "other",
+]);
+
+const createdAt = () =>
+  timestamp("created_at", { withTimezone: true }).notNull().defaultNow();
+
+const updatedAt = () =>
+  timestamp("updated_at", { withTimezone: true })
+    .notNull()
+    .defaultNow()
+    .$onUpdate(() => new Date());
+
+export const businesses = pgTable("businesses", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  slug: text("slug").notNull().unique(),
+  name: text("name").notNull(),
+  description: text("description"),
+  // Free-text guidance for the AI's voice, e.g. "friendly, uses ভাই/আপু".
+  toneNotes: text("tone_notes"),
+  currency: text("currency").notNull().default("BDT"),
+  timezone: text("timezone").notNull().default("Asia/Dhaka"),
+  createdAt: createdAt(),
+  updatedAt: updatedAt(),
+});
+
+export const channels = pgTable(
+  "channels",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    businessId: uuid("business_id")
+      .notNull()
+      .references(() => businesses.id, { onDelete: "cascade" }),
+    type: channelType("type").notNull(),
+    name: text("name").notNull(),
+    // Platform-side id (Facebook page id, bot id, WhatsApp phone number id).
+    externalId: text("external_id"),
+    // Tokens live here from D10 on; they must be encrypted before real use.
+    credentials: jsonb("credentials"),
+    isActive: boolean("is_active").notNull().default(true),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    unique("channels_business_id_id_key").on(t.businessId, t.id),
+    // A webhook finds its business by (type, external_id).
+    unique("channels_type_external_id_key").on(t.type, t.externalId),
+    index("channels_business_idx").on(t.businessId),
+  ],
+);
+
+export const customers = pgTable(
+  "customers",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    businessId: uuid("business_id")
+      .notNull()
+      .references(() => businesses.id, { onDelete: "cascade" }),
+    channelId: uuid("channel_id").notNull(),
+    // The customer's id on that platform (Telegram chat id, PSID, wa_id).
+    externalId: text("external_id").notNull(),
+    name: text("name"),
+    phone: text("phone"),
+    notes: text("notes"),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    unique("customers_business_id_id_key").on(t.businessId, t.id),
+    unique("customers_channel_external_key").on(t.channelId, t.externalId),
+    foreignKey({
+      name: "customers_channel_fk",
+      columns: [t.businessId, t.channelId],
+      foreignColumns: [channels.businessId, channels.id],
+    }).onDelete("cascade"),
+    index("customers_business_idx").on(t.businessId),
+  ],
+);
+
+export const conversations = pgTable(
+  "conversations",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    businessId: uuid("business_id")
+      .notNull()
+      .references(() => businesses.id, { onDelete: "cascade" }),
+    customerId: uuid("customer_id").notNull(),
+    channelId: uuid("channel_id").notNull(),
+    status: conversationStatus("status").notNull().default("open"),
+    // false once a human takes over; the AI stays silent until switched back.
+    aiEnabled: boolean("ai_enabled").notNull().default(true),
+    lastMessageAt: timestamp("last_message_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    unique("conversations_business_id_id_key").on(t.businessId, t.id),
+    foreignKey({
+      name: "conversations_customer_fk",
+      columns: [t.businessId, t.customerId],
+      foreignColumns: [customers.businessId, customers.id],
+    }).onDelete("cascade"),
+    foreignKey({
+      name: "conversations_channel_fk",
+      columns: [t.businessId, t.channelId],
+      foreignColumns: [channels.businessId, channels.id],
+    }).onDelete("cascade"),
+    index("conversations_inbox_idx").on(t.businessId, t.lastMessageAt),
+    index("conversations_customer_idx").on(t.customerId),
+  ],
+);
+
+export const messages = pgTable(
+  "messages",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    businessId: uuid("business_id")
+      .notNull()
+      .references(() => businesses.id, { onDelete: "cascade" }),
+    conversationId: uuid("conversation_id").notNull(),
+    sender: senderType("sender").notNull(),
+    content: text("content").notNull(),
+    // Platform message id; the unique index makes webhook retries harmless.
+    externalId: text("external_id"),
+    metadata: jsonb("metadata").notNull().default(sql`'{}'::jsonb`),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    foreignKey({
+      name: "messages_conversation_fk",
+      columns: [t.businessId, t.conversationId],
+      foreignColumns: [conversations.businessId, conversations.id],
+    }).onDelete("cascade"),
+    unique("messages_conversation_external_key").on(
+      t.conversationId,
+      t.externalId,
+    ),
+    index("messages_thread_idx").on(t.conversationId, t.createdAt),
+  ],
+);
+
+export const products = pgTable(
+  "products",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    businessId: uuid("business_id")
+      .notNull()
+      .references(() => businesses.id, { onDelete: "cascade" }),
+    sku: text("sku").notNull(),
+    name: text("name").notNull(),
+    description: text("description"),
+    price: numeric("price", { precision: 12, scale: 2 }).notNull(),
+    currency: text("currency").notNull().default("BDT"),
+    // Total stock. Per-size stock sits in attributes.sizes until D4 decides
+    // whether variants need their own table.
+    stockQuantity: integer("stock_quantity").notNull().default(0),
+    attributes: jsonb("attributes").notNull().default(sql`'{}'::jsonb`),
+    isActive: boolean("is_active").notNull().default(true),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    unique("products_business_sku_key").on(t.businessId, t.sku),
+    index("products_business_idx").on(t.businessId),
+  ],
+);
+
+// Source text for RAG. Chunks and embeddings arrive in D3, once the
+// embedding model (and so the vector size) is chosen.
+export const knowledgeDocuments = pgTable(
+  "knowledge_documents",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    businessId: uuid("business_id")
+      .notNull()
+      .references(() => businesses.id, { onDelete: "cascade" }),
+    kind: knowledgeKind("kind").notNull().default("other"),
+    title: text("title").notNull(),
+    content: text("content").notNull(),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [index("knowledge_business_idx").on(t.businessId)],
+);
