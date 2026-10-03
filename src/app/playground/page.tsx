@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 type Bubble = {
@@ -12,7 +13,7 @@ type Bubble = {
 type Usage = { inputTokens: number; outputTokens: number; cacheReadTokens: number };
 
 type StoredMessage = Bubble & {
-  metadata?: { model?: string; usage?: Usage };
+  metadata?: { model?: string; usage?: Usage; sources?: string[] };
 };
 
 type ApiError = { code: string; message: string };
@@ -35,7 +36,8 @@ const typingDelay = (text: string) => Math.min(2200, 500 + text.length * 25);
 function infoLine(meta?: StoredMessage["metadata"]) {
   if (!meta?.model || !meta.usage) return undefined;
   const { inputTokens, outputTokens, cacheReadTokens } = meta.usage;
-  return `${meta.model} · in ${inputTokens} (cached ${cacheReadTokens}) · out ${outputTokens}`;
+  const sources = meta.sources?.length ? ` · looked at: ${meta.sources.join(", ")}` : "";
+  return `${meta.model} · in ${inputTokens} (cached ${cacheReadTokens}) · out ${outputTokens}${sources}`;
 }
 
 export default function PlaygroundPage() {
@@ -101,7 +103,11 @@ export default function PlaygroundPage() {
         return;
       }
 
-      const info = infoLine({ model: data.model, usage: data.usage as Usage });
+      const info = infoLine({
+        model: data.model,
+        usage: data.usage as Usage,
+        sources: (data.retrieved?.knowledge ?? []).map((k: { title: string }) => k.title),
+      });
 
       for (const [i, reply] of (data.replies as { id: string; content: string }[]).entries()) {
         if (i > 0) {
@@ -140,14 +146,22 @@ export default function PlaygroundPage() {
             Local playground. Nothing here is sent to a real customer.
           </p>
         </div>
-        <button
-          type="button"
-          onClick={reset}
-          disabled={busy}
-          className="shrink-0 rounded-lg border border-black/15 px-3 py-1.5 text-sm disabled:opacity-40 dark:border-white/20"
-        >
-          Start over
-        </button>
+        <div className="flex shrink-0 gap-2">
+          <Link
+            href="/playground/knowledge"
+            className="rounded-lg border border-black/15 px-3 py-1.5 text-sm dark:border-white/20"
+          >
+            Knowledge
+          </Link>
+          <button
+            type="button"
+            onClick={reset}
+            disabled={busy}
+            className="rounded-lg border border-black/15 px-3 py-1.5 text-sm disabled:opacity-40 dark:border-white/20"
+          >
+            Start over
+          </button>
+        </div>
       </header>
 
       {!aiConfigured && (

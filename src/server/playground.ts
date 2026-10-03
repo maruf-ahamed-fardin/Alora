@@ -21,6 +21,15 @@ export class PlaygroundNotSeededError extends Error {
   }
 }
 
+export async function getPlaygroundBusiness() {
+  const [business] = await getDb()
+    .select()
+    .from(businesses)
+    .where(eq(businesses.slug, PLAYGROUND_BUSINESS_SLUG));
+  if (!business) throw new PlaygroundNotSeededError();
+  return business;
+}
+
 export async function getPlaygroundConversation() {
   const db = getDb();
 
