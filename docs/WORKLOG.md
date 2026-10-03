@@ -15,6 +15,47 @@ Entry er format:
 
 ---
 
+## D2 — AI engine v1 + local test playground (2026-10-03) — code ready, live check baki
+
+**Ki kora holo:** Customer-er message niye AI reply banay emon engine, ar browser e ekta test chat (`/playground`), login chara. Customer Bangla, Banglish ba English je script e likhbe, AI shei script e, choto choto bubble e reply dibe ar ager kotha mone rakhbe.
+
+**Ja verify kora holo ar ja holo na:**
+- Pass: 24 ta automated test, `tsc`, `lint`, `next build`.
+- Pass: ashol dev server er upor ekta **fake Anthropic server** diye end-to-end: message save, 2 bubble, history jawa, reset, bhul input, key chara 503.
+- **Holo na:** ashol Claude er reply dekha. API key nai, tai model ke sotti-i pathano hoy ni. Fake server proman kore na je Anthropic API amar request ta gohon korbe, ba je reply ta "manusher moto" hobe. Browser e UI click kore dekha o hoy ni (page 200 dey ar compile e kono warning nai, kintu chip/typing/scroll ami dekhi ni).
+
+**Kivabe kora holo:**
+- **Model-swappable:** engine shudhu `ChatModel` interface chine (`src/ai/model.ts`). Ekhon Claude, D15 e fine-tuned model eki jaygay boshbe.
+- **Default model `claude-opus-5-5`**, effort `low` (choto chat reply, tai druto ar sosta). `.env.local` e `AI_MODEL=claude-sonnet-5-5` likhle kom khoroche cholbe. Opus 5.5 e thinking bondho kora jay na, tai effort e kom rakha hoyeche.
+- **Prompt cache:** system prompt prottek turn e hubohu eki (kono tarikh/id nai), tai cache hoy. Ekhon prompt chhoto, tai cache ashole lagbe na; D3 e knowledge dhukle lagbe.
+- **Refusal fallback:** Anthropic er safety classifier kokhono reply atkale API nijei onno model e retry kore, customer er message fail hoy na. Eta amar jog kora, apni chan ni; `src/ai/anthropic.ts` e `FALLBACK_MODELS` theke bondho kora jay.
+- **Customer message age save:** model fail korleo customer er message hariye jay na.
+- **Prompt (`src/ai/prompt.ts`):** script mirror (Bangla / Banglish / English), choto plain text (markdown/bullet nai), ek emoji er beshi na, "As an AI" type stiff kotha nai, `---` diye bubble bhag, ar **dam / stock / policy kokhono guess korbe na**: "amar kache ekhon nei, team confirm korbe" bolbe (D3, D4 te asol data ashbe). Jodi keu sotti jiggesh kore bot kina, AI sotti bolbe. Customer ragi hole, obhijog korle ba "manager lagbe" bolle se team member er kotha bolbe.
+- **History:** shesh 30 ta message; AI er ek reply er bubble gulo `---` diye ek turn, customer er pop-pop message ek turn.
+
+**Kon file:**
+- `src/ai/` — `engine.ts`, `model.ts`, `anthropic.ts`, `prompt.ts`, `bubbles.ts` + tests
+- `src/server/playground.ts` — test chat er conversation
+- `src/app/api/playground/route.ts` — API
+- `src/app/playground/page.tsx` — chat UI
+- `.env.example`, `README.md`
+
+**Kivabe check korben:**
+1. https://console.anthropic.com theke API key nin. `C:\my-github\Alora\.env.local` file banan, ete lekhun: `ANTHROPIC_API_KEY=sk-ant-...`
+2. `npm run dev`, tarpor http://localhost:3000/playground
+3. Niche er chip gulo (ba nijer moto) likhe dekhun: `vai black tshirt ache?`, `দাম কত?`, `price koto?`, `tumi ki bot?`, `I want to talk to a manager`.
+4. Dekhun: script mile? choto? manusher moto? dam / stock banay ni to? Ager kotha mone rakhe?
+5. Prottek reply er niche model ar token dekhay (koto khoroch hocche bujhte).
+6. `npm test` key chara cholbe.
+
+**Ja janar moto:**
+- **Ekhon dam / stock bolte parbe na** (ei design). "vai black tshirt ache?" er uttore se jante chaibe kon size, ar bolbe team confirm korbe. Eta D3 (knowledge) ar D4 (tools) e thik hobe. Er age replies er *tone* niye feedback din (D5 er kaj).
+- **Khoroch:** per reply ~$0.01 er kache, Opus 5.5 e (amar anuman, nije measure kora na). Playground e token dekha jay.
+- **Ek shomoy ek message:** playground e UI Send bondho rakhe; real channel e (D10+) duto message ek shathe ashle queue lagbe.
+- Dev server cholar shomoy `db:*` command chalaben na (PGlite ek process).
+
+---
+
 ## D1 — Database, login chara (2026-10-03)
 
 **Ki kora holo:** Local database toiri holo: 7 ta table, migration, ekta demo business (seed), ar ekta health check. Shob kichu ek command e cholе: `npm run db:reset`. Login nai (D8 e).

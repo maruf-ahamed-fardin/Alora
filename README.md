@@ -14,6 +14,14 @@ npm run dev
 
 Open http://localhost:3000
 
+## AI model and test chat
+
+1. Get an API key at https://console.anthropic.com.
+2. Create `.env.local` (copy `.env.example`) and set `ANTHROPIC_API_KEY=...`.
+3. `npm run dev`, then open http://localhost:3000/playground and chat as a customer.
+
+`npm test` runs the tests; they need no key.
+
 ## Database (local)
 
 Local development uses PGlite (PostgreSQL 18 in WASM, pgvector included). Nothing to install; data lives in `.data/pglite` and is not committed.

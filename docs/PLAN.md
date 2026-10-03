@@ -3,7 +3,7 @@
 > **Alora** ("Alap" theke inspired): ekta multi-business SaaS. WhatsApp, Messenger, Instagram, Telegram (pore X) er customer message ek jaygay ashbe, ar AI Bangla / Banglish / English e manusher moto reply dibe.
 
 **Plan toiri:** 2026-10-03 (eki din e ekbar bodlano: login Stage D te, reply approval gate jog)
-**Ekhon kon destination:** `D1` shesh, review-er opekkhay. Porer: `D2` (user "porer ta koro" bolle; age Open decision 1 lagbe)
+**Ekhon kon destination:** `D2` code toiri, **apnar API key diye live reply check baki** (nicher D2 dekhun). Tarpor review dilei D3.
 
 ---
 
@@ -67,10 +67,11 @@ Protita table e `business_id` thakbe (multi-tenant), login na thakleo. Local e e
 
 ### Stage B — AI er matha (local, reply mon moto kora)
 
-#### [ ] D2 — AI engine v1 + local test playground
+#### [~] D2 — AI engine v1 + local test playground
 - **Ki hobe:** Browser e ekta test chat (login chara). System prompt, persona, conversation memory, customer je script e likhe (Bangla / Banglish / English) shei script e reply.
 - **Shesh mane:** Playground e "vai dam koto?" likhle shabhabik Banglish reply ashe ar ager message mone rakhe.
-- **Age lagbe:** *Open decision 1* (kon model).
+- **Status:** code, test (24 ta) ar fake-server end-to-end pass. **Ashol Claude-er reply ekhono dekha hoy ni**, karon API key nai. Key boshiye `/playground` e try korle `[x]` hobe.
+- **Age lagbe:** *Open decision 1* (kon model): hosted Claude default dhora hoyeche.
 
 #### [ ] D3 — Knowledge + tone "training"
 - **Ki hobe:** FAQ / policy / business info upload, embedding + pgvector search (RAG), tone example (purono bhalo reply) jog kora.
@@ -146,7 +147,7 @@ Protita table e `business_id` thakbe (multi-tenant), login na thakleo. Local e e
 
 | # | Proshno | Kokhon lagbe | Status |
 |---|---|---|---|
-| 1 | AI engine hosted model (paid API, recommended: Claude Opus 5.5; kom khoroche Sonnet 5.5 / Haiku 4.5) diye shuru, naki shudhu free / self-hosted? | D2 er age | Baki |
+| 1 | AI engine hosted model (paid API, recommended: Claude Opus 5.5; kom khoroche Sonnet 5.5 / Haiku 4.5) diye shuru, naki shudhu free / self-hosted? | D2 er age | Hosted Claude dhora hoyeche (user D2 shuru korte bolechhe). User ke API key dite hobe. Model `AI_MODEL` env diye bodlano jay. |
 | 2 | Hosting kothay (server, database)? | D9 er age | Baki |
 | 3 | Embedding model kon ta (Voyage / Cohere multilingual, ba self-hosted BGE-M3)? | D3 er age | Baki |
 
