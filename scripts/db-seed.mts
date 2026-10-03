@@ -4,7 +4,9 @@ import {
   businesses,
   channels,
   customers,
+  deliveryZones,
   knowledgeDocuments,
+  orders,
   products,
   toneExamples,
 } from "../src/db/schema";
@@ -43,12 +45,24 @@ await db.transaction(async (tx) => {
     })
     .returning();
 
-  await tx.insert(customers).values({
-    businessId: business.id,
-    channelId: channel.id,
-    externalId: "local-tester",
-    name: "Local Tester",
-  });
+  const [tester, stranger] = await tx
+    .insert(customers)
+    .values([
+      {
+        businessId: business.id,
+        channelId: channel.id,
+        externalId: "local-tester",
+        name: "Local Tester",
+      },
+      // Owns an order the tester must never be shown (see ORD-2001 below).
+      {
+        businessId: business.id,
+        channelId: channel.id,
+        externalId: "other-customer",
+        name: "Other Customer",
+      },
+    ])
+    .returning();
 
   await tx.insert(products).values([
     {
@@ -97,6 +111,71 @@ await db.transaction(async (tx) => {
       price: "2100.00",
       stockQuantity: 10,
       attributes: { color: "Blue", sizes: { "30": 3, "32": 5, "34": 2 } },
+    },
+  ]);
+
+  // Same numbers as the "Delivery" document below; the AI reads these through
+  // the get_delivery_charge tool, so keep the two in step.
+  await tx.insert(deliveryZones).values([
+    {
+      businessId: business.id,
+      name: "Inside Dhaka",
+      keywords: ["dhaka", "ঢাকা", "dhanmondi", "gulshan", "mirpur", "uttara", "banani", "mohammadpur"],
+      charge: "60.00",
+      minDays: 2,
+      maxDays: 3,
+      freeAbove: "3000.00",
+    },
+    {
+      businessId: business.id,
+      name: "Outside Dhaka",
+      isDefault: true,
+      charge: "120.00",
+      minDays: 3,
+      maxDays: 5,
+    },
+  ]);
+
+  await tx.insert(orders).values([
+    {
+      businessId: business.id,
+      orderNumber: "ORD-1001",
+      customerId: tester.id,
+      status: "shipped",
+      items: [
+        { name: "Black T-shirt", sku: "TS-BLK-001", size: "L", quantity: 2, unitPrice: 1300 },
+      ],
+      subtotal: "2600.00",
+      deliveryCharge: "60.00",
+      total: "2660.00",
+      shippingAddress: "House 12, Road 5, Dhanmondi, Dhaka",
+      courier: "Pathao",
+      trackingCode: "PT-884213",
+      placedAt: new Date("2026-10-01T10:30:00+06:00"),
+    },
+    {
+      businessId: business.id,
+      orderNumber: "ORD-1002",
+      customerId: tester.id,
+      status: "pending",
+      items: [{ name: "Denim Jeans", sku: "JN-DNM-001", size: "32", quantity: 1, unitPrice: 2100 }],
+      subtotal: "2100.00",
+      deliveryCharge: "120.00",
+      total: "2220.00",
+      shippingAddress: "Zindabazar, Sylhet",
+      placedAt: new Date("2026-10-03T16:05:00+06:00"),
+    },
+    {
+      businessId: business.id,
+      orderNumber: "ORD-2001",
+      customerId: stranger.id,
+      status: "confirmed",
+      items: [{ name: "Red Polo Shirt", sku: "PL-RED-001", size: "M", quantity: 1, unitPrice: 1650 }],
+      subtotal: "1650.00",
+      deliveryCharge: "60.00",
+      total: "1710.00",
+      shippingAddress: "Mirpur 10, Dhaka",
+      placedAt: new Date("2026-10-02T12:00:00+06:00"),
     },
   ]);
 
@@ -158,4 +237,4 @@ await db.transaction(async (tx) => {
 });
 
 await closeDb();
-console.log(`Seeded business "${TEST_BUSINESS_SLUG}" with 5 products, 5 knowledge documents and 8 tone examples.`);
+console.log(`Seeded business "${TEST_BUSINESS_SLUG}" with 5 products, 2 delivery zones, 3 orders (2 belong to the tester), 5 knowledge documents and 8 tone examples.`);

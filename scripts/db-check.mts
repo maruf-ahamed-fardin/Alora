@@ -90,6 +90,17 @@ if (demo) {
   report(productCount === 5, "5 products seeded", `found ${productCount}`);
   report(docCount === 5, "5 knowledge documents seeded", `found ${docCount}`);
 
+  const [{ count: zoneCount }] = await db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(deliveryZones)
+    .where(eq(deliveryZones.businessId, demo.id));
+  const [{ count: orderCount }] = await db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(orders)
+    .where(eq(orders.businessId, demo.id));
+  report(zoneCount === 2, "2 delivery zones seeded", `found ${zoneCount}`);
+  report(orderCount === 3, "3 orders seeded", `found ${orderCount}`);
+
   const [channel] = await db
     .select()
     .from(channels)
@@ -97,7 +108,7 @@ if (demo) {
   const [customer] = await db
     .select()
     .from(customers)
-    .where(eq(customers.businessId, demo.id));
+    .where(and(eq(customers.businessId, demo.id), eq(customers.externalId, "local-tester")));
   report(Boolean(channel && customer), "playground channel and tester customer exist");
 
   if (channel && customer) {

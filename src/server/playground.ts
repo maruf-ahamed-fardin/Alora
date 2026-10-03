@@ -13,6 +13,8 @@ import {
 // here is what customers will get later.
 
 export const PLAYGROUND_BUSINESS_SLUG = "demo-shop";
+// The seed also holds a second customer, to prove the tester cannot see theirs.
+export const PLAYGROUND_CUSTOMER_EXTERNAL_ID = "local-tester";
 
 export class PlaygroundNotSeededError extends Error {
   constructor() {
@@ -48,7 +50,12 @@ export async function getPlaygroundConversation() {
   const [customer] = await db
     .select()
     .from(customers)
-    .where(eq(customers.businessId, business.id));
+    .where(
+      and(
+        eq(customers.businessId, business.id),
+        eq(customers.externalId, PLAYGROUND_CUSTOMER_EXTERNAL_ID),
+      ),
+    );
   if (!channel || !customer) throw new PlaygroundNotSeededError();
 
   const [existing] = await db
