@@ -37,3 +37,10 @@ test("forbids inventing prices, stock and policies", () => {
   const prompt = buildSystemPrompt(shop);
   assert.match(prompt, /Never state or guess any of them/);
 });
+
+test("tells the model where facts and style examples come from", () => {
+  const prompt = buildSystemPrompt(shop);
+  assert.match(prompt, /"Shop information" section that follows this prompt/);
+  assert.match(prompt, /"Examples of how this shop's team replies" section/);
+  assert.match(prompt, /never copy a fact from them/);
+});
