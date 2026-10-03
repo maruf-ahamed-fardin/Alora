@@ -3,12 +3,22 @@ import {
   AiNotConfiguredError,
   EmptyReplyError,
   ModelRefusedError,
+  ToolLoopError,
   type ChatModel,
   type ModelRequest,
   type ModelResponse,
+  type ModelUsage,
+  type ToolCall,
 } from "./model";
+import { ToolInputError, type ToolDefinition } from "./tools/types";
 
 export const DEFAULT_MODEL = "claude-opus-5-5";
+
+// How many times the model may ask for tools before we give up. A normal reply
+// needs one or two rounds (look up, then answer).
+const MAX_TOOL_ROUNDS = 5;
+// Keeps one huge tool result from filling the model's context.
+const MAX_TOOL_OUTPUT = 8000;
 
 type Effort = "low" | "medium" | "high" | "xhigh" | "max";
 
@@ -45,46 +55,107 @@ export class AnthropicChatModel implements ChatModel {
     this.maxTokens = options.maxTokens ?? 4000;
   }
 
-  async reply({ system, context, messages }: ModelRequest): Promise<ModelResponse> {
+  async reply({ system, context, messages, tools = [] }: ModelRequest): Promise<ModelResponse> {
     const useFallback = FALLBACK_MODELS.has(this.model);
+    // Tools are sent before the system prompt and are the same on every turn
+    // of a conversation, so they stay inside the cached prefix.
+    const toolParams = tools.map((t) => ({
+      name: t.name,
+      description: t.description,
+      input_schema: t.inputSchema,
+    }));
 
-    const response = await this.client.beta.messages.create({
-      model: this.model,
-      max_tokens: this.maxTokens,
-      // The stable prompt is cached across turns. The per-message context sits
-      // after the cache breakpoint, so changing it does not invalidate the cache.
-      system: [
-        { type: "text", text: system, cache_control: { type: "ephemeral" } },
-        ...(context ? [{ type: "text" as const, text: context }] : []),
-      ],
-      messages,
-      ...(this.effort ? { output_config: { effort: this.effort } } : {}),
-      // If a safety classifier declines, the API retries on a fallback model
-      // inside the same call instead of failing the customer's message.
-      ...(useFallback
-        ? { betas: ["server-side-fallback-2026-07-01"], fallbacks: "default" as const }
-        : {}),
-    });
+    // Grows by two entries per tool round: the model's request, our results.
+    const thread: Anthropic.Beta.Messages.BetaMessageParam[] = [...messages];
+    const usage: ModelUsage = { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0 };
+    const toolCalls: ToolCall[] = [];
 
-    if (response.stop_reason === "refusal") {
-      throw new ModelRefusedError(response.stop_details?.category ?? null);
+    for (let round = 0; ; round++) {
+      const response = await this.client.beta.messages.create({
+        model: this.model,
+        max_tokens: this.maxTokens,
+        // The stable prompt is cached across turns. The per-message context sits
+        // after the cache breakpoint, so changing it does not invalidate the cache.
+        system: [
+          { type: "text", text: system, cache_control: { type: "ephemeral" } },
+          ...(context ? [{ type: "text" as const, text: context }] : []),
+        ],
+        messages: thread,
+        ...(toolParams.length > 0 ? { tools: toolParams } : {}),
+        ...(this.effort ? { output_config: { effort: this.effort } } : {}),
+        // If a safety classifier declines, the API retries on a fallback model
+        // inside the same call instead of failing the customer's message.
+        ...(useFallback
+          ? { betas: ["server-side-fallback-2026-07-01"], fallbacks: "default" as const }
+          : {}),
+      });
+
+      usage.inputTokens += response.usage.input_tokens;
+      usage.outputTokens += response.usage.output_tokens;
+      usage.cacheReadTokens += response.usage.cache_read_input_tokens ?? 0;
+
+      if (response.stop_reason === "refusal") {
+        throw new ModelRefusedError(response.stop_details?.category ?? null);
+      }
+
+      if (response.stop_reason === "tool_use") {
+        if (round >= MAX_TOOL_ROUNDS) throw new ToolLoopError(MAX_TOOL_ROUNDS);
+        const requests = response.content.flatMap((b) => (b.type === "tool_use" ? [b] : []));
+        const results = await Promise.all(requests.map((r) => runTool(tools, r.name, r.input)));
+        results.forEach((result, i) => {
+          toolCalls.push({
+            name: requests[i].name,
+            input: requests[i].input,
+            output: result.output,
+            isError: result.isError,
+          });
+        });
+        // The model's own turn goes back exactly as received (thinking blocks
+        // included), followed by one result per tool it asked for.
+        thread.push({ role: "assistant", content: response.content });
+        thread.push({
+          role: "user",
+          content: requests.map((r, i) => ({
+            type: "tool_result" as const,
+            tool_use_id: r.id,
+            content: results[i].output,
+            ...(results[i].isError ? { is_error: true } : {}),
+          })),
+        });
+        continue;
+      }
+
+      // Text written next to a tool request ("let me check...") is dropped; only
+      // the final turn is the customer's reply.
+      const text = response.content
+        .flatMap((block) => (block.type === "text" ? [block.text] : []))
+        .join("")
+        .trim();
+      if (!text) throw new EmptyReplyError(response.stop_reason);
+
+      return { text, model: response.model, usage, toolCalls };
     }
+  }
+}
 
-    const text = response.content
-      .flatMap((block) => (block.type === "text" ? [block.text] : []))
-      .join("")
-      .trim();
-    if (!text) throw new EmptyReplyError(response.stop_reason);
-
+async function runTool(
+  tools: ToolDefinition[],
+  name: string,
+  input: unknown,
+): Promise<{ output: string; isError: boolean }> {
+  const tool = tools.find((t) => t.name === name);
+  if (!tool) return { output: `Unknown tool "${name}".`, isError: true };
+  try {
+    const output = JSON.stringify(await tool.run(input)) ?? "null";
     return {
-      text,
-      model: response.model,
-      usage: {
-        inputTokens: response.usage.input_tokens,
-        outputTokens: response.usage.output_tokens,
-        cacheReadTokens: response.usage.cache_read_input_tokens ?? 0,
-      },
+      output: output.length > MAX_TOOL_OUTPUT ? `${output.slice(0, MAX_TOOL_OUTPUT)}…(cut)` : output,
+      isError: false,
     };
+  } catch (err) {
+    if (err instanceof ToolInputError) return { output: err.message, isError: true };
+    // The model only learns that the lookup failed; details stay in our log.
+    console.error(`Tool ${name} failed.`, err);
+    return { output: "The lookup failed. Tell the customer a team member will check.", isError: true };
   }
 }
 
