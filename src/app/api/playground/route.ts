@@ -1,6 +1,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { createChatModel } from "../../../ai/anthropic";
 import { handleCustomerMessage } from "../../../ai/engine";
+import { createEmbedder } from "../../../knowledge/embedder";
 import {
   AiNotConfiguredError,
   EmptyReplyError,
@@ -85,6 +86,7 @@ export async function POST(request: Request) {
       conversationId: conversation.id,
       text,
       model,
+      embedder: createEmbedder(),
     });
     return Response.json(result);
   } catch (err) {

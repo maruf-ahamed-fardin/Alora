@@ -1,11 +1,23 @@
 import { and, desc, eq } from "drizzle-orm";
 import { getDb } from "../db/client";
 import { businesses, conversations, messages } from "../db/schema";
+import type { Embedder } from "../knowledge/embedder";
+import {
+  searchKnowledge,
+  searchToneExamples,
+  type KnowledgeHit,
+  type ToneHit,
+} from "../knowledge/retrieval";
 import { splitIntoBubbles } from "./bubbles";
+import { buildContext } from "./context";
 import type { ChatMessage, ChatModel, ModelUsage } from "./model";
 import { buildSystemPrompt } from "./prompt";
 
 const DEFAULT_HISTORY_LIMIT = 30;
+const KNOWLEDGE_HITS = 3;
+const TONE_HITS = 3;
+// A message like "L" or "dam?" says nothing alone; add the one before it.
+const SHORT_MESSAGE = 20;
 
 export type Reply = { id: string; content: string; createdAt: Date };
 
@@ -14,7 +26,23 @@ export type ReplyResult = {
   replies: Reply[];
   model: string | null;
   usage: ModelUsage | null;
+  /** What was looked up for this message (for the playground and evaluation). */
+  retrieved: { knowledge: KnowledgeHit[]; examples: ToneHit[] };
 };
+
+const nothingRetrieved = () => ({ knowledge: [], examples: [] });
+
+/**
+ * The text to search the shop's records with. Customers write short follow-ups
+ * ("L", "price?"), so a very short last message is searched together with the
+ * customer message before it.
+ */
+export function retrievalQuery(history: ChatMessage[]): string {
+  const customerTurns = history.filter((m) => m.role === "user").map((m) => m.content);
+  const last = customerTurns.at(-1) ?? "";
+  const before = customerTurns.at(-2);
+  return last.length < SHORT_MESSAGE && before ? `${before}\n${last}` : last;
+}
 
 export class ConversationNotFoundError extends Error {
   constructor() {
@@ -28,6 +56,8 @@ type HandleMessage = {
   conversationId: string;
   text: string;
   model: ChatModel;
+  /** Without one, the model gets no shop information (D2 behaviour). */
+  embedder?: Embedder;
   /** How many recent messages the model sees. Older ones are dropped. */
   historyLimit?: number;
 };
@@ -44,6 +74,7 @@ export async function handleCustomerMessage({
   conversationId,
   text,
   model,
+  embedder,
   historyLimit = DEFAULT_HISTORY_LIMIT,
 }: HandleMessage): Promise<ReplyResult> {
   const db = getDb();
@@ -73,12 +104,20 @@ export async function handleCustomerMessage({
   await touch(conversationId);
 
   if (!conversation.aiEnabled) {
-    return { replies: [], model: null, usage: null };
+    return { replies: [], model: null, usage: null, retrieved: nothingRetrieved() };
   }
 
   const history = await loadHistory(businessId, conversationId, historyLimit);
+
+  const retrieved = embedder
+    ? await retrieve(businessId, retrievalQuery(history), embedder)
+    : null;
+
   const result = await model.reply({
     system: buildSystemPrompt(business),
+    context: retrieved
+      ? buildContext(retrieved.knowledge, retrieved.examples)
+      : undefined,
     messages: history,
   });
 
@@ -95,7 +134,14 @@ export async function handleCustomerMessage({
         sender: "ai" as const,
         content,
         createdAt: new Date(start + i),
-        metadata: i === 0 ? { model: result.model, usage: result.usage } : {},
+        metadata:
+          i === 0
+            ? {
+                model: result.model,
+                usage: result.usage,
+                sources: retrieved?.knowledge.map((k) => k.title) ?? [],
+              }
+            : {},
       })),
     )
     .returning({
@@ -109,7 +155,24 @@ export async function handleCustomerMessage({
     replies: saved.sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime()),
     model: result.model,
     usage: result.usage,
+    retrieved: retrieved ?? nothingRetrieved(),
   };
+}
+
+// A failing search (embedding model down) must not stop the customer getting
+// an answer. With nothing retrieved the prompt tells the model to say a team
+// member will confirm, which is safe.
+async function retrieve(businessId: string, query: string, embedder: Embedder) {
+  try {
+    const [knowledge, examples] = await Promise.all([
+      searchKnowledge(businessId, query, embedder, KNOWLEDGE_HITS),
+      searchToneExamples(businessId, query, embedder, TONE_HITS),
+    ]);
+    return { knowledge, examples };
+  } catch (err) {
+    console.error("Retrieval failed; replying without shop information.", err);
+    return nothingRetrieved();
+  }
 }
 
 async function touch(conversationId: string) {
