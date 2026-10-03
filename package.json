@@ -13,7 +13,8 @@
     "db:check": "tsx scripts/db-check.mts",
     "db:reset": "tsx scripts/db-reset.mts && npm run db:migrate && npm run db:seed && npm run kb:index",
     "test": "tsx --test \"src/**/*.test.ts\"",
-    "kb:index": "tsx scripts/kb-index.mts"
+    "kb:index": "tsx scripts/kb-index.mts",
+    "kb:eval": "tsx scripts/kb-eval.mts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.131.0",
