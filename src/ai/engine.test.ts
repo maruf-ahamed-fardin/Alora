@@ -11,8 +11,22 @@ const dir = mkdtempSync(path.join(tmpdir(), "alora-engine-test-"));
 process.env.DATABASE_DIR = dir;
 
 import { closeDb, getDb } from "../db/client";
-import { businesses, channels, conversations, customers, messages } from "../db/schema";
-import { ConversationNotFoundError, handleCustomerMessage } from "./engine";
+import {
+  businesses,
+  channels,
+  conversations,
+  customers,
+  knowledgeDocuments,
+  messages,
+  toneExamples,
+} from "../db/schema";
+import { indexBusiness } from "../knowledge/indexing";
+import { HashEmbedder } from "../knowledge/testing";
+import {
+  ConversationNotFoundError,
+  handleCustomerMessage,
+  retrievalQuery,
+} from "./engine";
 import type { ChatModel, ModelRequest } from "./model";
 
 class FakeModel implements ChatModel {
@@ -204,4 +218,103 @@ test("another business cannot use this conversation", async () => {
     ConversationNotFoundError,
   );
   assert.deepEqual(await thread(conversationId), []);
+});
+
+// --- shop information (RAG) -------------------------------------------------
+
+test("retrievalQuery: a short follow-up is searched together with the message before it", () => {
+  const turn = (role: "user" | "assistant", content: string) => ({ role, content });
+  assert.equal(
+    retrievalQuery([turn("user", "delivery charge koto hobe Dhaka te?"), turn("assistant", "ok"), turn("user", "L")]),
+    "delivery charge koto hobe Dhaka te?\nL",
+  );
+  assert.equal(
+    retrievalQuery([turn("user", "first"), turn("assistant", "ok"), turn("user", "this one is long enough to stand alone")]),
+    "this one is long enough to stand alone",
+  );
+  assert.equal(retrievalQuery([turn("user", "hi")]), "hi");
+});
+
+test("the model gets matching shop information and style examples as context", async () => {
+  const embedder = new HashEmbedder();
+  const db = getDb();
+  await db.insert(knowledgeDocuments).values([
+    { businessId, kind: "delivery", title: "Delivery", content: "delivery charge Dhaka 60 taka outside Dhaka 120 taka" },
+    { businessId, kind: "about", title: "Hours", content: "open saturday to thursday ten to ten" },
+  ]);
+  await db.insert(toneExamples).values({
+    businessId,
+    customerMessage: "delivery charge koto",
+    reply: "Dhakar moddhe 60 taka 😊",
+  });
+  await indexBusiness(businessId, embedder);
+
+  const conversationId = await newConversation();
+  const model = new FakeModel(["60 taka vai"]);
+  const out = await handleCustomerMessage({
+    businessId,
+    conversationId,
+    text: "delivery charge koto",
+    model,
+    embedder,
+  });
+
+  const context = model.calls[0].context ?? "";
+  assert.match(context, /## Shop information/);
+  assert.match(context, /Delivery: delivery charge Dhaka 60 taka/);
+  assert.match(context, /Customer: delivery charge koto\nTeam: Dhakar moddhe 60 taka 😊/);
+  assert.equal(out.retrieved.knowledge[0].title, "Delivery");
+  assert.equal(out.retrieved.examples[0].reply, "Dhakar moddhe 60 taka 😊");
+
+  const [saved] = (await getDb().select().from(messages).where(eq(messages.conversationId, conversationId)))
+    .filter((m) => m.sender === "ai");
+  assert.deepEqual((saved.metadata as { sources: string[] }).sources.includes("Delivery"), true);
+});
+
+test("without an embedder the model gets no context", async () => {
+  const conversationId = await newConversation();
+  const model = new FakeModel(["ok"]);
+  const out = await handleCustomerMessage({ businessId, conversationId, text: "hi", model });
+  assert.equal(model.calls[0].context, undefined);
+  assert.deepEqual(out.retrieved, { knowledge: [], examples: [] });
+});
+
+test("another business's knowledge never reaches the model", async () => {
+  const [other] = await getDb()
+    .insert(businesses)
+    .values({ slug: "rival", name: "Rival" })
+    .returning();
+  await getDb().insert(knowledgeDocuments).values({
+    businessId: other.id,
+    title: "Secret",
+    content: "rival secret delivery charge 1 taka",
+  });
+  const embedder = new HashEmbedder();
+  await indexBusiness(other.id, embedder);
+
+  const conversationId = await newConversation();
+  const model = new FakeModel(["ok"]);
+  await handleCustomerMessage({ businessId, conversationId, text: "rival secret delivery charge", model, embedder });
+  assert.doesNotMatch(model.calls[0].context ?? "", /rival secret/);
+});
+
+test("if retrieval fails the customer still gets a reply, told nothing matched", async () => {
+  const broken = new HashEmbedder();
+  broken.embedQuery = async () => {
+    throw new Error("embedding model down");
+  };
+  const conversationId = await newConversation();
+  const model = new FakeModel(["ek minute vai"]);
+
+  const errors: unknown[] = [];
+  const original = console.error;
+  console.error = (...args: unknown[]) => errors.push(args);
+  try {
+    const out = await handleCustomerMessage({ businessId, conversationId, text: "delivery koto?", model, embedder: broken });
+    assert.deepEqual(out.replies.map((r) => r.content), ["ek minute vai"]);
+  } finally {
+    console.error = original;
+  }
+  assert.equal(errors.length, 1);
+  assert.match(model.calls[0].context ?? "", /Nothing in the shop's records matched/);
 });
