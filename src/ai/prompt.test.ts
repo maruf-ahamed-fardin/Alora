@@ -33,9 +33,23 @@ test("handles a business without description or tone notes", () => {
   assert.match(prompt, /be warm, polite and brief/);
 });
 
-test("forbids inventing prices, stock and policies", () => {
+test("forbids inventing prices, stock and orders: they come from the tools", () => {
   const prompt = buildSystemPrompt(shop);
-  assert.match(prompt, /Never state or guess any of them/);
+  assert.match(prompt, /Never state a price, availability, charge, delivery time or order status that a tool did not just return/);
+  for (const tool of ["get_product", "check_stock", "get_delivery_charge", "get_order", "handoff_to_agent"]) {
+    assert.ok(prompt.includes(tool), `mentions ${tool}`);
+  }
+});
+
+test("tells the model to hand over through the tool, once, and not on an empty lookup", () => {
+  const prompt = buildSystemPrompt(shop);
+  assert.match(prompt, /call handoff_to_agent with a one-sentence reason/);
+  assert.match(prompt, /Call it once/);
+  assert.match(prompt, /You cannot place, change or cancel an order yourself/);
+});
+
+test("does not tell the customer about tools or the system", () => {
+  assert.match(buildSystemPrompt(shop), /Never mention tools, databases or "the system"/);
 });
 
 test("tells the model where facts and style examples come from", () => {

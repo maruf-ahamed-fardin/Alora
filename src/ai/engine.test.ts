@@ -18,6 +18,7 @@ import {
   customers,
   knowledgeDocuments,
   messages,
+  orders,
   toneExamples,
 } from "../db/schema";
 import { indexBusiness } from "../knowledge/indexing";
@@ -27,14 +28,16 @@ import {
   handleCustomerMessage,
   retrievalQuery,
 } from "./engine";
-import type { ChatModel, ModelRequest } from "./model";
+import type { ChatModel, ModelRequest, ToolCall } from "./model";
 
 class FakeModel implements ChatModel {
   calls: ModelRequest[] = [];
+  toolNames: (string[] | undefined)[] = [];
   constructor(private answers: (string | Error)[]) {}
   async reply(request: ModelRequest) {
     // Tools hold functions, which cannot be cloned; tests of them live elsewhere.
     this.calls.push(structuredClone({ ...request, tools: undefined }));
+    this.toolNames.push(request.tools?.map((t) => t.name));
     const next = this.answers.shift() ?? "ok";
     if (next instanceof Error) throw next;
     return {
@@ -319,4 +322,119 @@ test("if retrieval fails the customer still gets a reply, told nothing matched",
   }
   assert.equal(errors.length, 1);
   assert.match(model.calls[0].context ?? "", /Nothing in the shop's records matched/);
+});
+
+// --- tools ------------------------------------------------------------------
+
+// Stands in for Claude: calls the named tools with the given input, like the
+// real adapter does, then answers.
+class ToolUsingModel implements ChatModel {
+  constructor(private plan: { tool: string; input: unknown }[]) {}
+  async reply(request: ModelRequest) {
+    const toolCalls: ToolCall[] = [];
+    for (const step of this.plan) {
+      const tool = request.tools?.find((t) => t.name === step.tool);
+      assert.ok(tool, `engine offered tool ${step.tool}`);
+      toolCalls.push({
+        name: step.tool,
+        input: step.input,
+        output: JSON.stringify(await tool.run(step.input)),
+        isError: false,
+      });
+    }
+    return {
+      text: "reply after tools",
+      model: "fake-model",
+      usage: { inputTokens: 1, outputTokens: 1, cacheReadTokens: 0 },
+      toolCalls,
+    };
+  }
+}
+
+test("the model is offered the five tools by default and none when switched off", async () => {
+  const model = new FakeModel(["ok", "ok"]);
+  await handleCustomerMessage({ businessId, conversationId: await newConversation(), text: "hi", model });
+  await handleCustomerMessage({
+    businessId,
+    conversationId: await newConversation(),
+    text: "hi",
+    model,
+    useTools: false,
+  });
+  assert.deepEqual(model.toolNames[0], [
+    "get_product",
+    "check_stock",
+    "get_delivery_charge",
+    "get_order",
+    "handoff_to_agent",
+  ]);
+  assert.equal(model.toolNames[1], undefined);
+});
+
+test("tool calls are returned and saved with the reply", async () => {
+  const conversationId = await newConversation();
+  const out = await handleCustomerMessage({
+    businessId,
+    conversationId,
+    text: "dam koto?",
+    model: new ToolUsingModel([{ tool: "get_product", input: { query: "shirt" } }]),
+  });
+
+  assert.equal(out.toolCalls.length, 1);
+  assert.equal(out.toolCalls[0].name, "get_product");
+  const [saved] = (await getDb().select().from(messages).where(eq(messages.conversationId, conversationId))).filter(
+    (m) => m.sender === "ai",
+  );
+  const stored = (saved.metadata as { toolCalls: ToolCall[] }).toolCalls;
+  assert.deepEqual(stored.map((c) => c.name), ["get_product"]);
+});
+
+test("the tools are tied to this conversation's customer: another customer's order is not found", async () => {
+  const db = getDb();
+  const [stranger] = await db
+    .insert(customers)
+    .values({ businessId, channelId, externalId: "stranger" })
+    .returning();
+  await db.insert(orders).values([
+    { businessId, orderNumber: "ORD-1", customerId, subtotal: "100", total: "100" },
+    { businessId, orderNumber: "ORD-2", customerId: stranger.id, subtotal: "200", total: "200" },
+  ]);
+
+  const mine = await handleCustomerMessage({
+    businessId,
+    conversationId: await newConversation(),
+    text: "ORD-1 kothay?",
+    model: new ToolUsingModel([{ tool: "get_order", input: { order_number: "ORD-1" } }]),
+  });
+  assert.match(mine.toolCalls[0].output, /"orderNumber":"ORD-1"/);
+
+  const theirs = await handleCustomerMessage({
+    businessId,
+    conversationId: await newConversation(),
+    text: "ORD-2 kothay?",
+    model: new ToolUsingModel([{ tool: "get_order", input: { order_number: "ORD-2" } }]),
+  });
+  assert.doesNotMatch(theirs.toolCalls[0].output, /ORD-2/);
+});
+
+test("after the model hands over, the AI stays silent for the next message", async () => {
+  const conversationId = await newConversation();
+  const out = await handleCustomerMessage({
+    businessId,
+    conversationId,
+    text: "refund chai, manager dekhan",
+    model: new ToolUsingModel([{ tool: "handoff_to_agent", input: { reason: "wants a refund" } }]),
+  });
+  assert.deepEqual(out.replies.map((r) => r.content), ["reply after tools"]);
+
+  const model = new FakeModel(["should not be used"]);
+  const next = await handleCustomerMessage({ businessId, conversationId, text: "hello?", model });
+  assert.deepEqual(next.replies, []);
+  assert.equal(model.calls.length, 0);
+
+  const [conversation] = await getDb().select().from(conversations).where(eq(conversations.id, conversationId));
+  assert.equal(conversation.status, "handoff");
+  // The team's note is stored but never shown to the model as a chat turn.
+  const history = await thread(conversationId);
+  assert.ok(history.some((line) => line.startsWith("system: Handed over")));
 });

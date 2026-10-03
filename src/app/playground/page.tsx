@@ -12,17 +12,23 @@ type Bubble = {
 
 type Usage = { inputTokens: number; outputTokens: number; cacheReadTokens: number };
 
+type ToolCall = { name: string; input: unknown; isError: boolean };
+
 type StoredMessage = Bubble & {
-  metadata?: { model?: string; usage?: Usage; sources?: string[] };
+  metadata?: { model?: string; usage?: Usage; sources?: string[]; toolCalls?: ToolCall[] };
 };
 
 type ApiError = { code: string; message: string };
 
 const SAMPLES = [
   "vai black tshirt ache?",
+  "white tshirt L size ache?",
+  "navy hoodie ache?",
   "দাম কত?",
   "price koto?",
   "ভাই delivery charge কত?",
+  "sylhet e delivery charge koto?",
+  "ORD-1001 kothay?",
   "order ta ekhono ashe nai 😡",
   "tumi ki bot?",
   "I want to talk to a manager",
@@ -33,11 +39,19 @@ const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 // A person needs a moment to type; longer text takes longer.
 const typingDelay = (text: string) => Math.min(2200, 500 + text.length * 25);
 
+// "get_product(black tshirt)", with a ! if the tool reported an error.
+function toolLabel(call: ToolCall) {
+  const input =
+    call.input && typeof call.input === "object" ? Object.values(call.input).join(", ") : "";
+  return `${call.name}(${input})${call.isError ? "!" : ""}`;
+}
+
 function infoLine(meta?: StoredMessage["metadata"]) {
   if (!meta?.model || !meta.usage) return undefined;
   const { inputTokens, outputTokens, cacheReadTokens } = meta.usage;
   const sources = meta.sources?.length ? ` · looked at: ${meta.sources.join(", ")}` : "";
-  return `${meta.model} · in ${inputTokens} (cached ${cacheReadTokens}) · out ${outputTokens}${sources}`;
+  const tools = meta.toolCalls?.length ? ` · tools: ${meta.toolCalls.map(toolLabel).join(", ")}` : "";
+  return `${meta.model} · in ${inputTokens} (cached ${cacheReadTokens}) · out ${outputTokens}${sources}${tools}`;
 }
 
 export default function PlaygroundPage() {
@@ -107,6 +121,7 @@ export default function PlaygroundPage() {
         model: data.model,
         usage: data.usage as Usage,
         sources: (data.retrieved?.knowledge ?? []).map((k: { title: string }) => k.title),
+        toolCalls: data.toolCalls as ToolCall[],
       });
 
       for (const [i, reply] of (data.replies as { id: string; content: string }[]).entries()) {
