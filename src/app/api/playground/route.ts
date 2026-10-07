@@ -55,9 +55,7 @@ export async function GET() {
     const thread = await listThread(business.id, conversation.id);
     return Response.json({
       business: { name: business.name },
-      aiConfigured: Boolean(
-        process.env.ANTHROPIC_API_KEY || process.env.ANTHROPIC_AUTH_TOKEN,
-      ),
+      aiConfigured: isAiConfigured(),
       messages: thread,
     });
   } catch (err) {

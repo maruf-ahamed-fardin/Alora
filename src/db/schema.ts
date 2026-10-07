@@ -52,6 +52,12 @@ export const knowledgeKind = pgEnum("knowledge_kind", [
   "other",
 ]);
 
+export const userRole = pgEnum("user_role", [
+  "owner",
+  "admin",
+  "agent",
+]);
+
 // Size of the embedding model's output (multilingual-e5-small). Changing the
 // model to one with a different size means a new migration and re-indexing.
 export const EMBEDDING_DIMENSIONS = 384;
@@ -77,6 +83,47 @@ export const businesses = pgTable("businesses", {
   createdAt: createdAt(),
   updatedAt: updatedAt(),
 });
+
+export const users = pgTable(
+  "users",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    businessId: uuid("business_id")
+      .notNull()
+      .references(() => businesses.id, { onDelete: "cascade" }),
+    email: text("email").notNull(),
+    passwordHash: text("password_hash").notNull(),
+    name: text("name").notNull(),
+    role: userRole("role").notNull().default("owner"),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    unique("users_business_id_id_key").on(t.businessId, t.id),
+    unique("users_email_key").on(t.email),
+    index("users_business_idx").on(t.businessId),
+  ],
+);
+
+export const sessions = pgTable(
+  "sessions",
+  {
+    id: text("id").primaryKey(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    businessId: uuid("business_id")
+      .notNull()
+      .references(() => businesses.id, { onDelete: "cascade" }),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    index("sessions_user_idx").on(t.userId),
+    index("sessions_business_idx").on(t.businessId),
+    index("sessions_expires_idx").on(t.expiresAt),
+  ],
+);
 
 export const channels = pgTable(
   "channels",

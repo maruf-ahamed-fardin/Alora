@@ -65,6 +65,8 @@ type HandleMessage = {
   historyLimit?: number;
   /** Product, stock, delivery, order and handoff tools. On by default. */
   useTools?: boolean;
+  /** Platform message id (Telegram, Meta, etc.) for idempotency. */
+  externalId?: string;
 };
 
 /**
@@ -82,6 +84,7 @@ export async function handleCustomerMessage({
   embedder,
   historyLimit = DEFAULT_HISTORY_LIMIT,
   useTools = true,
+  externalId,
 }: HandleMessage): Promise<ReplyResult> {
   const db = getDb();
 
@@ -106,6 +109,7 @@ export async function handleCustomerMessage({
     conversationId,
     sender: "customer",
     content: text,
+    externalId,
   });
   await touch(conversationId);
 

@@ -12,6 +12,7 @@ import * as schema from "./schema";
 
 export function getDataDir() {
   return path.resolve(
+    /*turbopackIgnore: true*/
     process.cwd(),
     process.env.DATABASE_DIR ?? ".data/pglite",
   );
