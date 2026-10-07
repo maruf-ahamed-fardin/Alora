@@ -79,3 +79,13 @@ export class EmptyReplyError extends Error {
     this.name = "EmptyReplyError";
   }
 }
+
+/** Ollama or local LLM server is not reachable. */
+export class OllamaConnectionError extends Error {
+  constructor(public baseUrl: string) {
+    super(
+      `Could not connect to Ollama at ${baseUrl}. Make sure Ollama is running (e.g. run 'ollama serve' or 'ollama run <model>').`,
+    );
+    this.name = "OllamaConnectionError";
+  }
+}

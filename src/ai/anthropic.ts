@@ -11,6 +11,7 @@ import {
   type ToolCall,
 } from "./model";
 import { ToolInputError, type ToolDefinition } from "./tools/types";
+import { runTool } from "./tools/runner";
 
 export const DEFAULT_MODEL = "claude-opus-5-5";
 
@@ -138,26 +139,6 @@ export class AnthropicChatModel implements ChatModel {
   }
 }
 
-async function runTool(
-  tools: ToolDefinition[],
-  name: string,
-  input: unknown,
-): Promise<{ output: string; isError: boolean }> {
-  const tool = tools.find((t) => t.name === name);
-  if (!tool) return { output: `Unknown tool "${name}".`, isError: true };
-  try {
-    const output = JSON.stringify(await tool.run(input)) ?? "null";
-    return {
-      output: output.length > MAX_TOOL_OUTPUT ? `${output.slice(0, MAX_TOOL_OUTPUT)}…(cut)` : output,
-      isError: false,
-    };
-  } catch (err) {
-    if (err instanceof ToolInputError) return { output: err.message, isError: true };
-    // The model only learns that the lookup failed; details stay in our log.
-    console.error(`Tool ${name} failed.`, err);
-    return { output: "The lookup failed. Tell the customer a team member will check.", isError: true };
-  }
-}
 
 /** Build the hosted model from environment variables (see .env.example). */
 export function createChatModel(): ChatModel {

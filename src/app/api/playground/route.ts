@@ -1,11 +1,12 @@
 import Anthropic from "@anthropic-ai/sdk";
-import { createChatModel } from "../../../ai/anthropic";
+import { createChatModel, isAiConfigured } from "../../../ai/factory";
 import { handleCustomerMessage } from "../../../ai/engine";
 import { createEmbedder } from "../../../knowledge/embedder";
 import {
   AiNotConfiguredError,
   EmptyReplyError,
   ModelRefusedError,
+  OllamaConnectionError,
 } from "../../../ai/model";
 import {
   getPlaygroundConversation,
@@ -28,6 +29,9 @@ function toErrorResponse(err: unknown) {
   }
   if (err instanceof AiNotConfiguredError) {
     return fail(503, "ai_not_configured", err.message);
+  }
+  if (err instanceof OllamaConnectionError) {
+    return fail(503, "ollama_not_running", err.message);
   }
   if (err instanceof ModelRefusedError || err instanceof EmptyReplyError) {
     return fail(502, "no_reply", err.message);
