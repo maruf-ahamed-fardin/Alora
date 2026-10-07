@@ -15,6 +15,232 @@ Entry er format:
 
 ---
 
+## D12 — WhatsApp (WhatsApp Business Cloud API) (2026-10-08)
+
+**Ki kora holo:** WhatsApp Business Cloud API connect korar jonno dedicated channel adapter, webhook handshake endpoint (`GET /api/webhooks/whatsapp`), incoming messages receiver (`POST /api/webhooks/whatsapp`), customer phone number & contact profile mapping, interactive button reply support, message status update (sent/delivered/read) filtering, Send API client (`graph.facebook.com/v21.0/{phone_number_id}/messages`), bidirectional agent takeover with live forwarding from `/inbox` to WhatsApp, ebong CLI diagnostics tool (`npm run wa:setup`) toiri kora holo. WhatsApp e customer message pathale AI automatically Bangla/Banglish e reply dey ebong `/inbox` dashboard e conversation live update hoy; abar human agent inbox theke reply dile sheta direct customer er WhatsApp e deliver hoy.
+
+**Ja verify kora holo ar ja holo na:**
+- Pass: 136 ta test (134 passed, 2 real embedding download test skipped), `tsc`, `next build` (zero errors, zero warnings).
+- Pass: `src/server/channels/whatsapp.test.ts` e 6 ta dedicated unit test pass (challenge handshake, message payload parsing & status filtering, interactive button reply extraction, customer/conversation auto-creation with phone, duplicate wamid prevention, agent takeover suppression).
+- Pass: `next build` e `/api/webhooks/whatsapp` dynamic server route compile pass.
+- **Baki:** D8 (Login / Multi-tenant merchant auth) ebong D9 (Production deploy).
+
+**Kivabe kora holo:**
+- **Webhook Handshake & Cloud API Client:** Meta WhatsApp Business verification challenge verify kora hoy (`hub.verify_token`). `sendWhatsAppMessage` function Meta Graph Messages endpoint call kore text messages deliver kore.
+- **Payload Parsing & Profile Mapping:** Meta er multiple payload variants (text messages, interactive button replies, list replies) parse kore customer er WhatsApp display name o phone number automatic database er `customers` table e save kora hoy.
+- **Idempotency & Takeover:** `wamid` tracking er maddhome duplicate webhook retries safely drop hoy. Agent takeover korle AI chup thake, ebong human agent `/inbox` theke reply pathale (`sendAgentMessage`) sheti direct WhatsApp Cloud API diye customer er phone e deliver hoy.
+- **Diagnostics Script:** `npm run wa:setup` CLI script run korle connected WhatsApp business phone number details (display number, verified name, quality rating, verification status) ebong Meta Developer console webhook instructions print hoy.
+
+**Kon file:**
+- `src/server/channels/types.ts`
+- `src/server/channels/whatsapp.ts`
+- `src/server/channels/whatsapp.test.ts`
+- `src/app/api/webhooks/whatsapp/route.ts`
+- `src/server/inbox.ts` (agent reply forwarding to WhatsApp)
+- `scripts/whatsapp-setup.mts`
+- `.env.example`, `package.json`, `docs/PLAN.md`, `docs/WORKLOG.md`
+
+**Kivabe check korben:**
+1. `npm test` chalale 136 ta test (134 pass, 2 skip) dekhabe.
+2. `npm run build` chalale 0 errors o 0 warnings e build pass hobe.
+3. Setup check korte:
+   - `npm run wa:setup` chalaye WhatsApp Business Phone Number connection dekhun.
+   - Meta for Developers -> WhatsApp -> Configuration e Webhook Callback URL boshun:
+     `https://<your-domain>/api/webhooks/whatsapp`
+   - Verify token: `alora-whatsapp-secret` (ba `.env.local` e apnar deya `WHATSAPP_VERIFY_TOKEN`).
+   - Webhook field: Subscribe to `messages`.
+
+
+## D11 — Messenger + Instagram (Meta Webhooks & Send API) (2026-10-08)
+
+**Ki kora holo:** Facebook Messenger ebong Instagram Direct connect korar jonno Meta Graph Webhook adapter, challenge verification handshake (`hub.mode`, `hub.verify_token`, `hub.challenge`), HMAC SHA256 payload signature verification (`X-Hub-Signature-256`), Send API client, idempotency protection (`mid`), bidirectional takeover with live message forwarding, ebong CLI diagnostics tool (`npm run meta:setup`) toiri kora holo. Facebook Page ba Instagram Direct e customer message pathale AI automatically Bangla/Banglish e reply dey ebong `/inbox` dashboard e conversation live update hoy; abar human agent inbox theke reply dile sheta direct customer er Messenger / Instagram e deliver hoy.
+
+**Ja verify kora holo ar ja holo na:**
+- Pass: 130 ta test (128 passed, 2 real embedding download test skipped), `tsc`, `next build` (zero errors, zero warnings).
+- Pass: `src/server/channels/meta.test.ts` e 7 ta dedicated unit test pass (challenge handshake, HMAC sha256 signature verification, echo skipping, Instagram object parsing, customer/conversation auto-creation, duplicate mid prevention, agent handoff suppression).
+- Pass: `next build` e `/api/webhooks/meta` ebong `/api/webhooks/messenger` routes compile pass.
+- **Baki:** D12 (WhatsApp Cloud API webhook) ebong live Meta Developer App approval (Meta Graph API verification review).
+
+**Kivabe kora holo:**
+- **Webhook Handshake & Security:** `GET /api/webhooks/meta` e Meta Dashboard theke verification token request ashe (`hub.verify_token`). Verification match hole 200 OK shoho challenge string return hoy. `POST /api/webhooks/meta` e `X-Hub-Signature-256` header check kore legitimate Meta servers confirm kora hoy.
+- **Normalized Multi-Platform Parser:** `parseMetaWebhook` function Facebook Messenger (`object: page`) ebong Instagram Direct (`object: instagram`) duitai handle kore. Bot er nijer reply echoes (`is_echo: true`) ebong delivery receipts automatically filter out kore infinite reply loop protect kore.
+- **Bidirectional Send API & Takeover:** `sendMetaMessage` function `https://graph.facebook.com/v21.0/me/messages` call kore text reply deliver kore. Agent takeover korle (`aiEnabled: false`), customer message save hoy kintu AI chup thake. Agent inbox theke reply pathale (`sendAgentMessage`) sheti direct Meta Send API diye customer er phone e deliver hoy.
+- **Diagnostics Script:** `npm run meta:setup` CLI script run korle connected Facebook Page identity (name, ID, category), verify token, ebong Meta Developer console e webhook boshannor step-by-step instructions dekhay.
+
+**Kon file:**
+- `src/server/channels/types.ts`
+- `src/server/channels/meta.ts`
+- `src/server/channels/meta.test.ts`
+- `src/app/api/webhooks/meta/route.ts`
+- `src/app/api/webhooks/messenger/route.ts`
+- `src/server/inbox.ts` (agent reply forwarding to Messenger & Instagram)
+- `scripts/meta-setup.mts`
+- `.env.example`, `package.json`, `docs/PLAN.md`, `docs/WORKLOG.md`
+
+**Kivabe check korben:**
+1. `npm test` chalale 130 ta test (128 pass, 2 skip) dekhabe.
+2. `npm run build` chalale 0 errors o 0 warnings e build pass hobe.
+3. Setup check korte:
+   - `npm run meta:setup` chalaye Facebook Page connection o webhook settings dekhun.
+   - Meta for Developers (developers.facebook.com) e App Webhook URL boshun:
+     `https://<your-domain>/api/webhooks/meta`
+   - Verify token: `alora-meta-secret` (ba `.env.local` e apnar deya `META_VERIFY_TOKEN`).
+   - Meta "Verify and Save" click korlei instant verified hobe!
+
+
+## D10 — Telegram (prothom ashol channel) (2026-10-08)
+
+**Ki kora holo:** Alora er prothom ashol external channel **Telegram Bot** connect kora holo! Telegram webhook adapter, incoming update parser, automated AI reply loop, idempotency protection, bidirectional human agent takeover, ebong CLI setup & diagnostics script (`npm run tg:setup`) toiri kora holo. Phone theke Telegram bot e message pathale AI automatically Bangla/Banglish e reply dey ebong `/inbox` dashboard e conversation live update hoy; abar human agent inbox theke reply dile sheta direct customer er Telegram app e chole jay.
+
+**Ja verify kora holo ar ja holo na:**
+- Pass: 117 ta test (115 passed, 2 real embedding download test skipped), `tsc`, `next build` (zero errors, zero warnings).
+- Pass: `src/server/channels/telegram.test.ts` e 7 ta dedicated unit test pass (update parsing, /start command, secret token verification, customer/conversation auto-creation, duplicate prevention/idempotency, agent handoff suppression).
+- Pass: `next build` e `/api/webhooks/telegram` ebong `/api/webhooks/telegram/setup` routes compile pass.
+- **Baki:** D8 (Login / Multi-tenant merchant auth) ebong D11/D12 (Meta WhatsApp / Messenger webhook).
+
+**Kivabe kora holo:**
+- **Channel Adapter & Parser:** `src/server/channels/telegram.ts` e Telegram Update payload parse kore text, sender name, user ID, chat ID ber kora hoy. Non-text message gracefully handle hoy, ebong `/start` command e business persona onujayi natural greetings trigger hoy.
+- **Auto Customer & Thread Provisioning:** Prothom bar kono user message dile database er `customers` ebong `conversations` table e auto-provision hoy, purono open thread thakle shetai reuse hoy.
+- **Idempotency:** Webhook retry te duplicate reply atkate `messages.externalId` check kora hoy; duplicate message_id ashle safe skip kore.
+- **Bidirectional Takeover:** Inbox e agent takeover korle (`aiEnabled: false`), customer er message save hoy kintu AI chup thake. Agent jokhon `/inbox` theke reply pathay (`sendAgentMessage`), sheti automatically customer er Telegram chat e `sendMessage` API diye deliver hoy.
+- **Security & Setup:** Webhook endpoint e `x-telegram-bot-api-secret-token` header verify kora jay. `npm run tg:setup` CLI tool diye bot identity, pending updates o webhook URL direct set/delete kora jay.
+
+**Kon file:**
+- `src/server/channels/types.ts`
+- `src/server/channels/telegram.ts`
+- `src/server/channels/telegram.test.ts`
+- `src/app/api/webhooks/telegram/route.ts`
+- `src/app/api/webhooks/telegram/setup/route.ts`
+- `src/server/inbox.ts` (agent reply forwarding to Telegram)
+- `src/ai/engine.ts` (externalId support in handleCustomerMessage)
+- `scripts/telegram-setup.mts`
+- `.env.example`, `package.json`, `docs/PLAN.md`, `docs/WORKLOG.md`
+
+**Kivabe check korben:**
+1. `npm test` chalale 117 ta test (115 pass) dekhabe.
+2. `npm run build` chalale 0 errors o 0 warnings e build pass hobe.
+3. Bot test korte:
+   - Telegram e `@BotFather` theke ekta bot toiri kore token nin.
+   - `.env.local` e `TELEGRAM_BOT_TOKEN=<your_token>` boshaye `npm run tg:setup` chalale bot name o status dekhabe.
+   - Local e test korte ngrok ba cloudflare tunnel chalaye webhook set korun:
+     `npm run tg:setup https://<your-subdomain>.ngrok-free.app/api/webhooks/telegram`
+   - Phone e bot ke message pathan: AI er reply phone e ashbe ebong `http://localhost:3000/inbox` e thread live dekha jabe!
+
+
+## D7 — PWA (2026-10-08)
+
+**Ki kora holo:** Alora ke ekta fully installable **Progressive Web App (PWA)** hishebe ready kora holo. Mobile phone ba desktop computer e "Add to Home Screen" ba "Install App" click korlei standalone native app er moto chole. Branded vector icons (192x192, 512x512, maskable), Next.js metadata manifest route (`/manifest.webmanifest`), precaching Service Worker (`/sw.js`), floating install prompt, ebong push notification permission o alert dispatcher toiri kora holo. Inbox header e "Install App" o "Enable Alerts / Alerts On" buttons jog kora hoyeche.
+
+**Ja verify kora holo ar ja holo na:**
+- Pass: 110 ta test (108 passed, 2 real embedding download test skipped), `tsc`, `next build` (zero errors).
+- Pass: `src/server/pwa.test.ts` unit test pass (subscription tracking, duplicate prevention).
+- Pass: `next build` e `/manifest.webmanifest`, `/api/pwa/subscribe`, `/api/pwa/notify` shob routes static/dynamic compile pass.
+- Pass: `/sw.js` precache, push handler, o notification click handler working.
+- **Baki:** Production deployment (D9) e HTTPS o live domain connect kora (PWA local `localhost` e install support kore, production e HTTPS lagbe).
+
+**Kivabe kora holo:**
+- **Next.js Web App Manifest:** `src/app/manifest.ts` e metadata route diye standard `MetadataRoute.Manifest` provide kora hoyeche (standalone display mode, portrait-primary, theme color `#059669`).
+- **Branded Icons:** `public/icons/icon-192.svg` o `public/icons/icon-512.svg` e emerald gradient background o Alora spark branding vector toiri kora hoyeche.
+- **Service Worker (`public/sw.js`):** Precaches `/`, `/inbox`, `/playground`, `/icons/icon-192.svg`. Handles `push` event to display system notification with sound/vibration pattern, and `notificationclick` event to bring the user directly to `/inbox`.
+- **Client PWA Provider (`src/components/pwa-provider.tsx`):** Captures `beforeinstallprompt`, renders unobtrusive floating install banner, provides `usePwa` context with `promptInstall()` and `requestNotificationPermission()`.
+- **Push Notification API:** `POST /api/pwa/subscribe` o `POST /api/pwa/notify` endpoints to receive subscriptions and dispatch alerts.
+
+**Kon file:**
+- `src/app/manifest.ts`
+- `public/sw.js`
+- `public/icons/icon-192.svg`, `public/icons/icon-512.svg`
+- `src/components/pwa-provider.tsx`
+- `src/app/layout.tsx` (PwaProvider, themeColor, viewport, appleWebApp metadata)
+- `src/app/inbox/page.tsx` (Install App & Notification toggle buttons)
+- `src/server/pwa.ts`, `src/server/pwa.test.ts`
+- `src/app/api/pwa/subscribe/route.ts`, `src/app/api/pwa/notify/route.ts`
+- `docs/PLAN.md`, `docs/WORKLOG.md`
+
+**Kivabe check korben:**
+1. `npm test` diye 110 ti test pass verify korun.
+2. `npm run dev` chalaye browser e **`http://localhost:3000/inbox`** e jan:
+   - Header e **"Enable Alerts"** click korun — browser notification permission chaibe; "Allow" korle instantly test notification trigger hobe!
+   - Browser address bar e ba header e "Install App" button dekhun (Chrome/Edge e desktop app hishebe install kora jay).
+   - Phone theke access korle "Add to Home Screen" prompt dekhabe.
+
+---
+
+## D6 — Unified inbox UI (2026-10-08)
+
+**Ki kora holo:** Alora-r jonno ekta premium, mobile-responsive **Unified Inbox** (`/inbox`) toiri kora holo. WhatsApp, Telegram, Messenger, Instagram ebong Playground er shob conversation ek jaygay ashbe. Agent chobi, customer nam, phone, channel badge dekhte parbe, live conversation filter korte parbe (All, Human Needed, Open, Closed, channel onujayi), ek click e **Take Over** kore AI bondho kore manual message pathate parbe, abar **Resume AI** diye AI chalu korte parbe. Pashe customer er previous order history (order number, courier, tracking code) o details panel dekha jay.
+
+**Ja verify kora holo ar ja holo na:**
+- Pass: 109 ta test (107 passed, 2 real embedding download test skipped), `tsc`, `next build` (zero errors).
+- Pass: `src/server/inbox.test.ts` e 7 ta dedicated unit test pass (list conversations, message thread, agent reply, toggle AI on/off, change status, order inspection).
+- Pass: `db:seed` e 4 ti omnichannel demo conversation (WhatsApp, Telegram handoff, Messenger, Playground) shoho rich test data seeded o `db:check` pass.
+- Pass: `next build` e `/inbox`, `/api/inbox/conversations`, `/api/inbox/conversations/[id]`, `/api/inbox/conversations/[id]/messages` shob routes optimized o build pass.
+- **Baki:** D7 (PWA - Add to Home Screen, service worker) ebong D10-D12 te ashol social media webhook connect kora.
+
+**Kivabe kora holo:**
+- **3-Pane Desktop / 1-Pane Mobile UX:** Left pane conversation list + live search & channel pills; middle pane dynamic chat thread with sender badges (Customer, AI Assistant, You Agent, System note); right pane collapsible customer profile & order history drawer.
+- **Agent Takeover & Live Toggle:** `PATCH /api/inbox/conversations/[id]` diye `aiEnabled: false` / `true` toggle hoy. Agent takeover korle thread e automatic system note ashbe ebong AI chup thakbe. Agent direct reply pathale message `sender: "agent"` hishebe save hoy.
+- **Customer Simulator Mode:** Local development e testing shohoj korar jonno inbox-ei "Test as Customer" toggle ache, ja diye live message pathiye AI response o agent takeover test kora jay.
+- **Omnichannel Branding:** WhatsApp (emerald), Telegram (sky), Messenger (blue), Instagram (pink), Playground (purple) customized badges o icons.
+
+**Kon file:**
+- `src/app/inbox/page.tsx`
+- `src/server/inbox.ts`, `src/server/inbox.test.ts`
+- `src/app/api/inbox/conversations/route.ts`
+- `src/app/api/inbox/conversations/[id]/route.ts`
+- `src/app/api/inbox/conversations/[id]/messages/route.ts`
+- `src/app/page.tsx` (Homepage links to Inbox)
+- `scripts/db-seed.mts` (Omnichannel sample conversations)
+- `docs/PLAN.md`, `docs/WORKLOG.md`
+
+**Kivabe check korben:**
+1. `npm test` chalale 109 ti test pass dekhabe.
+2. `npm run dev` chalaye browser e **`http://localhost:3000/inbox`** e jan:
+   - Left side e WhatsApp, Telegram, Messenger, Playground conversations dekhun.
+   - Tanvir Rahman (Telegram) conversation click korun (eta Handoff mode e ache, AI paused).
+   - "Resume AI" click kore AI chalu korun, ba agent reply likhe Send korun.
+   - Nusrat Jahan (WhatsApp) conversation e "Take Over" click korun (AI pause hoye jabe).
+   - Right side e customer er order details (ORD-1001, tracking code) dekhun.
+   - "Test as Customer" mode switch kore live notun message pathiye AI er reply live dekhun.
+
+---
+
+## D5 — Reply tuning + user approval (2026-10-08) — suite & feedback loop ready
+
+**Ki kora holo:** Reply quality, natural chat rhythm, prompt injection protection o Banglish tone tuning er jonno 42 ta realistic customer cases toiri kora holo (`src/ai/reply-eval-cases.ts`). Automated evaluation runner `npm run reply:eval` (`scripts/reply-eval.mts`) jog kora holo ja rhythm (bubble count), formatting (markdown bold/headers), facts inclusion, forbidden robotic phrases o tool accuracy check kore. Playground UI-te "Emon howa uchit chilo?" inline correction feature jog kora hoyeche, ja diye user je kono AI reply correction type kore direct `tone_examples` e save o auto-reindex korte pare (`/api/playground/feedback`). Generous token allocation (`AI_MAX_TOKENS`) o high speed tuning complete kora holo.
+
+**Ja verify kora holo ar ja holo na:**
+- Pass: 102 ta test (100 passed, 2 real embedding download test skipped), `tsc`, `next build` (zero errors).
+- Pass: `npm run reply:eval` structural validation on all 42 cases (11 categories across Bangla, Banglish, and English).
+- Pass: `POST /api/playground/feedback` route unit test (valid input, invalid input, database insertion & embedder re-index).
+- Pass: `next build` routes including `/api/playground/feedback` and optimized static playground pages.
+- **Baki:** User nijer machine e live model (Anthropic API key ba local Ollama) diye `/playground` e chat kore dekhe "reply mon moto hoyeche" approve kora (Gate).
+
+**Kivabe kora holo:**
+- **42 Case Evaluation Suite:** Greetings, product lookup, stock check, delivery charges, customer orders & privacy boundaries (ORD-1001 vs ORD-2001), human handoff, bargaining, prompt injection, and hallucination traps.
+- **Rhythm & Tone Validation:** Bubble splitting via `---` strictly maintained (max 2-3 bubbles), markdown formatting banned in prompt & verified in test runner, no robotic clichés ("As an AI", "Certainly!").
+- **Playground Inline Correction:** AI reply bubble er niche "Emon howa uchit chilo?" click korle correction input ashe. Save korle RAG er `tone_examples` e chole jay ebong poroborti similar query te model shei desired tone example follow kore.
+- **Speed & Token Optimization:** `AI_EFFORT=low`, configurable `AI_MAX_TOKENS=8000` for Anthropic & Ollama adapters.
+
+**Kon file:**
+- `src/ai/reply-eval-cases.ts`, `scripts/reply-eval.mts`
+- `src/app/api/playground/feedback/route.ts`, `src/app/api/playground/feedback/route.test.ts`
+- `src/app/playground/page.tsx`, `src/app/api/playground/route.ts`
+- `src/ai/prompt.ts`, `src/ai/factory.ts`, `src/ai/ollama.ts`, `.env.example`, `package.json`
+- `docs/PLAN.md`, `docs/WORKLOG.md`
+
+**Kivabe check korben:**
+1. `npm test` diye 102 ta unit test check korun.
+2. `npm run reply:eval` run kore 42 ta case er evaluation breakdown dekhun.
+3. Model configure kore (`.env.local` e `ANTHROPIC_API_KEY` ba `AI_PROVIDER=ollama`) `npm run dev` chalaye `http://localhost:3000/playground` e jan:
+   - SAMPLES er notun button gulo click korun ("discount dewa jay na?", "sylhet e delivery charge koto?").
+   - Kono reply pochhondo na hole bubble er niche "Emon howa uchit chilo?" click kore apnar mon moto reply likhe "Save Example" korun.
+   - Re-test kore dekhun model oi tone dhorche kina.
+
+**Ja baki / janar moto:**
+- User playground e test kore "reply mon moto hoyeche" approve korle D5 `[x]` hobe ebong Stage C (D6: Unified inbox UI) shuru kora jabe.
+
+---
+
 ## D4 — Tools (2026-10-04) — code ready, live check baki
 
 **Ki kora holo:** AI ekhon dam, stock, delivery charge ar order er status **nijer thekei na bole database theke dekhe** bole. Customer "white tshirt L size ache?" likhle AI database dekhe bole L sold out, M ar XL ache. "ORD-1001 kothay?" likhle shudhu **oi customer er nijer** order dekhay; onno customer er order number dile "paoa jay ni" bole. Customer rege gele ba refund chaile AI `handoff_to_agent` diye chat team ke diye dey ar nije chup hoye jay.

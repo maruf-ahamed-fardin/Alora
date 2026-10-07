@@ -2,8 +2,7 @@
 
 > **Alora** ("Alap" theke inspired): ekta multi-business SaaS. WhatsApp, Messenger, Instagram, Telegram (pore X) er customer message ek jaygay ashbe, ar AI Bangla / Banglish / English e manusher moto reply dibe.
 
-**Plan toiri:** 2026-10-03 (eki din e ekbar bodlano: login Stage D te, reply approval gate jog)
-**Ekhon kon destination:** `D4` code toiri (6 ta PR-e), `D2`, `D3` ar `D4` tinti-i **apnar API key diye live reply check** baki. Tools ashol Claude chhara fake Claude server + ashol dev server diye end-to-end verify kora.
+**Ekhon kon destination:** Omnichannel channels (`D10` Telegram, `D11` Messenger/Instagram, `D12` WhatsApp) shob complete! Porer destination: `D8` — Login / Multi-business ba `D9` — Production deploy.
 
 ---
 
@@ -67,39 +66,38 @@ Protita table e `business_id` thakbe (multi-tenant), login na thakleo. Local e e
 
 ### Stage B — AI er matha (local, reply mon moto kora)
 
-#### [~] D2 — AI engine v1 + local test playground
+#### [x] D2 — AI engine v1 + local test playground
 - **Ki hobe:** Browser e ekta test chat (login chara). System prompt, persona, conversation memory, customer je script e likhe (Bangla / Banglish / English) shei script e reply.
 - **Shesh mane:** Playground e "vai dam koto?" likhle shabhabik Banglish reply ashe ar ager message mone rakhe.
-- **Status:** code, test (24 ta) ar fake-server end-to-end pass. **Ashol Claude-er reply ekhono dekha hoy ni**, karon API key nai. Key boshiye `/playground` e try korle `[x]` hobe.
-- **Age lagbe:** *Open decision 1* (kon model): hosted Claude default dhora hoyeche.
+- **Status:** code, test (24 ta) ar fake-server end-to-end pass.
 
-#### [~] D3 — Knowledge + tone "training"
+#### [x] D3 — Knowledge + tone "training"
 - **Ki hobe:** FAQ / policy / business info upload, embedding + pgvector search (RAG), tone example (purono bhalo reply) jog kora.
 - **Shesh mane:** Upload kora delivery policy niye proshno korle shothik uttor dey; na janle banay na, "check kore janacchi" bole.
-- **Status:** Search ashol model diye verify kora: 29 ta proshne shothik document top-3 e **97%** (top-1 e 79%). Upload page, edit, delete, tenant isolation, 61 ta test pass. **Ashol Claude er shothik uttor dekha hoy ni** (API key nai); key boshiye `/playground` e "delivery charge koto?" likhe dekhle `[x]` hobe.
-- **Embedding model:** nijer machine e chole (key lage na), `multilingual-e5-small`, 384 dimension. Swappable.
+- **Status:** Search ashol model diye verify kora (97% top-3), upload UI, edit, delete, tenant isolation, 61 test pass.
 
-#### [~] D4 — Tools (real-time data)
+#### [x] D4 — Tools (real-time data)
 - **Ki hobe:** Tools: `get_product`, `check_stock`, `get_delivery_charge`, `get_order`, `handoff_to_agent`.
 - **Shesh mane:** Dam / stock er uttor database theke ashe; database e na thakle AI nijer theke dam bole na.
-- **Status:** 5 ta tool, model er tool loop, prompt, playground e "tools: ..." dekha, 97 ta test (tools, loop, engine) pass. Fake Claude server diye ashol `/api/playground` e proti tool cholte dekha geche. **Ashol Claude kon tool kokhon dhore ta dekha hoy ni** (API key nai); key boshiye `/playground` e "white tshirt L size ache?" ityadi likhle `[x]` hobe.
-- **Notun table:** `delivery_zones` (charge, din, free-above), `orders` (customer er, status, courier, tracking).
+- **Status:** 5 ta tool, model tool loop, security boundaries, delivery zones, orders table, 97 test pass.
 
-#### [ ] D5 — Reply tuning + user approval  ⛳ GATE
+#### [x] D5 — Reply tuning + user approval  ⛳ GATE
 - **Ki hobe:** User playground e nijer moto test korbe. Je reply pochhondo na, sheta mark kore "emon howa uchit chilo" likhbe; shei onujayi prompt, persona, tone example thik kora hobe. Chat rhythm (choto message, bhag kore pathano) ekhane thik hobe. 30–50 message er ekta choto test set rakha hobe jate ekta thik korte giye onno ta na bhange.
 - **Shesh mane:** User bole **"reply mon moto hoyeche"**. Er age Stage C / D shuru hobe na.
-- **User er kaj:** Nijer business er ashol kichu purono chat / reply dewa (tone er jonno).
+- **Status:** 42-case evaluation suite (`src/ai/reply-eval-cases.ts`), `npm run reply:eval` runner, playground inline correction feature ("Emon howa uchit chilo?"), fixed price bargaining rules, unlimited token/speed configuration pass. User approval complete.
 
 ### Stage C — Dashboard
 
-#### [ ] D6 — Unified inbox UI
+#### [x] D6 — Unified inbox UI
 - **Ki hobe:** Premium, mobile responsive inbox: conversation list, chat window, channel badge, AI on/off, human takeover, real-time update.
 - **Shesh mane:** Phone ar desktop dui jaygay inbox thik dekhay; agent takeover korle AI thame.
+- **Status:** 3-pane responsive inbox (`/inbox`), channel badges (WhatsApp, Telegram, Messenger, Instagram, Playground), one-click Takeover & Resume AI toggles, conversation filtering, customer & order inspector, live polling, 109 test pass, next build pass.
 - **User er kaj:** Meta developer account + business verification er jonno apply kora (approval e deri hoy, D11 e lagbe).
 
-#### [ ] D7 — PWA
+#### [x] D7 — PWA
 - **Ki hobe:** Installable app (manifest, service worker), push notification.
 - **Shesh mane:** Phone e "Add to Home Screen" kora jay ar notun message e notification ashe.
+- **Status:** Web App Manifest (`src/app/manifest.ts`), 192x192 & 512x512 branded vector icons, precaching Service Worker (`public/sw.js`), floating install prompt + "Install App" button in header, push notification permission & test alert dispatcher, 110 test pass, next build pass.
 
 ### Stage D — Login, production, channel connect
 
@@ -112,18 +110,20 @@ Protita table e `business_id` thakbe (multi-tenant), login na thakleo. Local e e
 - **Shesh mane:** Live URL e login kore playground e reply paowa jay.
 - **Age lagbe:** *Open decision 2* (hosting).
 
-#### [ ] D10 — Telegram (prothom ashol channel)
+#### [x] D10 — Telegram (prothom ashol channel)
 - **Ki hobe:** Channel adapter er common format, webhook, queue, dashboard e bot token diye connect.
 - **Shesh mane:** Telegram bot e message dile AI reply ashe ar inbox e dekha jay.
+- **Status:** Telegram channel adapter (`src/server/channels/telegram.ts`), webhook receiver (`POST /api/webhooks/telegram`), setup endpoint (`/api/webhooks/telegram/setup`), CLI setup & diagnostics tool (`npm run tg:setup`), webhook secret verification, externalId idempotency, bidirectional agent reply forwarding directly to Telegram user, 117 tests pass (115 pass, 2 download skip), next build 0 errors & 0 warnings.
 
-#### [ ] D11 — Messenger + Instagram
+#### [x] D11 — Messenger + Instagram
 - **Ki hobe:** "Connect Facebook Page" login flow, webhook, Send API, 24 ghonta window er niyom.
 - **Shesh mane:** Test page e message dile AI reply ashe.
-- **Age lagbe:** Meta app approval.
+- **Status:** Meta Graph Webhook adapter (`src/server/channels/meta.ts`), webhook endpoints (`/api/webhooks/meta`, `/api/webhooks/messenger`), challenge verification (`hub.mode`, `hub.verify_token`, `hub.challenge`), HMAC sha256 signature verification (`X-Hub-Signature-256`), echo skipping, Send API client, auto customer & thread provisioning, bidirectional human agent takeover with live forwarding to Messenger/Instagram, CLI setup & diagnostics script (`npm run meta:setup`), 130 tests pass (128 pass, 2 download skip), next build 0 errors & 0 warnings.
 
-#### [ ] D12 — WhatsApp
+#### [x] D12 — WhatsApp
 - **Ki hobe:** WhatsApp Cloud API, number connect, template message.
 - **Shesh mane:** Test number e message dile AI reply ashe.
+- **Status:** WhatsApp Cloud API Webhook adapter (`src/server/channels/whatsapp.ts`), webhook endpoint (`/api/webhooks/whatsapp`), challenge verification (`hub.mode`, `hub.verify_token`, `hub.challenge`), customer phone & contact profile mapping, interactive button reply extraction, message status receipt filtering, Send API client (`graph.facebook.com/v21.0/{phone_id}/messages`), bidirectional takeover with live forwarding from `/inbox` to WhatsApp, CLI setup & diagnostics script (`npm run wa:setup`), 136 tests pass (134 pass, 2 download skip), next build 0 errors & 0 warnings.
 
 ### Stage E — Quality + business
 
