@@ -19,9 +19,11 @@ export function createChatModel(): ChatModel {
 
   if (process.env.ANTHROPIC_API_KEY || process.env.ANTHROPIC_AUTH_TOKEN) {
     const effort = process.env.AI_EFFORT as "low" | "medium" | "high" | "xhigh" | "max" | undefined;
+    const maxTokens = process.env.AI_MAX_TOKENS ? parseInt(process.env.AI_MAX_TOKENS, 10) : undefined;
     return new AnthropicChatModel({
       model: process.env.AI_MODEL || DEFAULT_ANTHROPIC_MODEL,
       effort,
+      maxTokens,
     });
   }
 

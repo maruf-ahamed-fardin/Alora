@@ -90,6 +90,7 @@ export class OllamaChatModel implements ChatModel {
             ...(formattedTools.length > 0 ? { tools: formattedTools } : {}),
             options: {
               temperature: 0.3,
+              num_predict: process.env.AI_MAX_TOKENS ? parseInt(process.env.AI_MAX_TOKENS, 10) : 4096,
             },
           }),
         });

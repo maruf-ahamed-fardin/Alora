@@ -3,9 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
-    "build": "next build",
-    "start": "next start",
+    "dev": "node api.js && next dev",
+    "build": "node api.js && next build",
+    "start": "node api.js && next start",
     "lint": "eslint",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "tsx scripts/db-migrate.mts",
@@ -14,7 +14,11 @@
     "db:reset": "tsx scripts/db-reset.mts && npm run db:migrate && npm run db:seed && npm run kb:index",
     "test": "tsx --test \"src/**/*.test.ts\"",
     "kb:index": "tsx scripts/kb-index.mts",
-    "kb:eval": "tsx scripts/kb-eval.mts"
+    "kb:eval": "tsx scripts/kb-eval.mts",
+    "reply:eval": "tsx scripts/reply-eval.mts",
+    "tg:setup": "tsx scripts/telegram-setup.mts",
+    "meta:setup": "tsx scripts/meta-setup.mts",
+    "wa:setup": "tsx scripts/whatsapp-setup.mts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.131.0",

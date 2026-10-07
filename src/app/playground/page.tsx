@@ -26,9 +26,12 @@ const SAMPLES = [
   "navy hoodie ache?",
   "দাম কত?",
   "price koto?",
+  "discount dewa jay na?",
   "ভাই delivery charge কত?",
   "sylhet e delivery charge koto?",
   "ORD-1001 kothay?",
+  "bkash e payment kora jabe?",
+  "ami black tshirt M size order korte chai",
   "order ta ekhono ashe nai 😡",
   "tumi ki bot?",
   "I want to talk to a manager",
@@ -62,6 +65,10 @@ export default function PlaygroundPage() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<ApiError | null>(null);
   const [aiConfigured, setAiConfigured] = useState(true);
+  const [feedbackBubbleId, setFeedbackBubbleId] = useState<string | null>(null);
+  const [feedbackText, setFeedbackText] = useState("");
+  const [feedbackSaving, setFeedbackSaving] = useState(false);
+  const [feedbackStatus, setFeedbackStatus] = useState<string | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
 
   const load = useCallback(async () => {
@@ -150,6 +157,40 @@ export default function PlaygroundPage() {
     await load();
   }
 
+  async function saveCorrection(aiBubbleId: string) {
+    const aiIdx = bubbles.findIndex((b) => b.id === aiBubbleId);
+    const prevCustomer = bubbles
+      .slice(0, aiIdx)
+      .reverse()
+      .find((b) => b.sender === "customer");
+    if (!prevCustomer || !feedbackText.trim()) return;
+
+    setFeedbackSaving(true);
+    setFeedbackStatus(null);
+    try {
+      const res = await fetch("/api/playground/feedback", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          customerMessage: prevCustomer.content,
+          suggestedReply: feedbackText.trim(),
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error?.message || "Failed to save");
+      setFeedbackStatus("Saved as tone example!");
+      setTimeout(() => {
+        setFeedbackBubbleId(null);
+        setFeedbackStatus(null);
+        setFeedbackText("");
+      }, 1500);
+    } catch (err) {
+      setFeedbackStatus(err instanceof Error ? err.message : "Failed to save.");
+    } finally {
+      setFeedbackSaving(false);
+    }
+  }
+
   return (
     <div className="mx-auto flex h-dvh max-w-2xl flex-col">
       <header className="flex items-center justify-between gap-3 border-b border-black/10 px-4 py-3 dark:border-white/15">
@@ -207,6 +248,48 @@ export default function PlaygroundPage() {
               {b.content}
             </div>
             {b.info && <span className="mt-0.5 px-1 text-[11px] opacity-40">{b.info}</span>}
+            {b.sender === "ai" && (
+              <div className="mt-0.5 px-1">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setFeedbackBubbleId(feedbackBubbleId === b.id ? null : b.id);
+                    setFeedbackText("");
+                    setFeedbackStatus(null);
+                  }}
+                  className="text-[11px] opacity-40 hover:opacity-90 underline decoration-dotted"
+                >
+                  {feedbackBubbleId === b.id ? "Cancel correction" : "Emon howa uchit chilo?"}
+                </button>
+              </div>
+            )}
+            {feedbackBubbleId === b.id && (
+              <div className="mt-2 w-full max-w-[85%] rounded-xl border border-black/10 bg-black/[0.02] p-2.5 text-xs dark:border-white/15 dark:bg-white/[0.04]">
+                <label className="mb-1 block font-medium opacity-80">
+                  Suggested Reply (Emon howa uchit chilo):
+                </label>
+                <textarea
+                  rows={2}
+                  value={feedbackText}
+                  onChange={(e) => setFeedbackText(e.target.value)}
+                  placeholder="AI kivabe reply dewa uchit chilo likhun..."
+                  className="w-full resize-none rounded-lg border border-black/15 bg-transparent p-2 text-xs outline-none focus:border-emerald-600 dark:border-white/20"
+                />
+                <div className="mt-2 flex items-center justify-between">
+                  <span className="text-[11px] opacity-60">
+                    {feedbackStatus || "Saves to Tone Examples for RAG"}
+                  </span>
+                  <button
+                    type="button"
+                    disabled={feedbackSaving || !feedbackText.trim()}
+                    onClick={() => void saveCorrection(b.id)}
+                    className="rounded-lg bg-emerald-600 px-3 py-1 text-xs font-medium text-white disabled:opacity-40"
+                  >
+                    {feedbackSaving ? "Saving…" : "Save Example"}
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         ))}
         {typing && (

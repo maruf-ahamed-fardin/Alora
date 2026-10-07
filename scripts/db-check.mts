@@ -11,7 +11,9 @@ import {
   messages,
   orders,
   products,
+  sessions,
   toneExamples,
+  users,
 } from "../src/db/schema";
 
 // Health check for the local database. Every test that writes runs inside a
@@ -57,8 +59,8 @@ const tables = await pg.query<{ table_name: string }>(
    order by table_name`,
 );
 report(
-  tables.rows.length === 11,
-  "11 tables exist",
+  tables.rows.length === 13,
+  "13 tables exist",
   tables.rows.map((r) => r.table_name).join(", "),
 );
 
@@ -110,6 +112,12 @@ if (demo) {
     .from(customers)
     .where(and(eq(customers.businessId, demo.id), eq(customers.externalId, "local-tester")));
   report(Boolean(channel && customer), "playground channel and tester customer exist");
+
+  const [adminUser] = await db
+    .select()
+    .from(users)
+    .where(and(eq(users.businessId, demo.id), eq(users.email, "admin@alora.ai")));
+  report(Boolean(adminUser), "seeded user 'admin@alora.ai' exists for demo-shop");
 
   if (channel && customer) {
     await rolledBack(async (tx) => {
@@ -247,6 +255,18 @@ if (demo) {
           conversationId: conv.id,
           sender: "customer",
           content: "leak?",
+        });
+      },
+    );
+
+    await mustBeRejected(
+      "a user cannot be registered with duplicate email",
+      async (tx) => {
+        await tx.insert(users).values({
+          businessId: demo.id,
+          email: "admin@alora.ai",
+          passwordHash: "dummyhash",
+          name: "Duplicate User",
         });
       },
     );

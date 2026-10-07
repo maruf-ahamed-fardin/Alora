@@ -1,27 +1,32 @@
-import { eq } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import { closeDb, getDb } from "../src/db/client";
 import {
   businesses,
   channels,
+  conversations,
   customers,
   deliveryZones,
   knowledgeDocuments,
+  messages,
   orders,
   products,
   toneExamples,
+  users,
 } from "../src/db/schema";
+import { hashPassword } from "../src/server/auth";
 
-// One demo business for local work. Safe to re-run: it replaces itself.
-// Data is Bangladesh-style on purpose (BDT, bKash/Nagad, ভাই/আপু, Banglish)
-// so the AI is tested against what real customers will ask.
+// Two businesses for multi-business local testing. Safe to re-run: replaces itself.
+// 1. Alora Demo Shop (demo-shop, admin@alora.ai / password123)
+// 2. Artisan Leather (artisan-leather, artisan@example.com / password123)
 
 const TEST_BUSINESS_SLUG = "demo-shop";
+const SECOND_BUSINESS_SLUG = "artisan-leather";
 
 const db = getDb();
 
 await db.transaction(async (tx) => {
-  // Cascades through every table that carries this business_id.
-  await tx.delete(businesses).where(eq(businesses.slug, TEST_BUSINESS_SLUG));
+  // Cascades through every table that carries these business_ids.
+  await tx.delete(businesses).where(inArray(businesses.slug, [TEST_BUSINESS_SLUG, SECOND_BUSINESS_SLUG]));
 
   const [business] = await tx
     .insert(businesses)
@@ -35,17 +40,47 @@ await db.transaction(async (tx) => {
     })
     .returning();
 
-  const [channel] = await tx
+  const defaultPasswordHash = await hashPassword("password123");
+
+  await tx.insert(users).values({
+    businessId: business.id,
+    email: "admin@alora.ai",
+    passwordHash: defaultPasswordHash,
+    name: "Alora Demo Admin",
+    role: "owner",
+  });
+
+  const [channel, waChannel, tgChannel, fbChannel] = await tx
     .insert(channels)
-    .values({
-      businessId: business.id,
-      type: "playground",
-      name: "Local playground",
-      externalId: "demo-shop-playground",
-    })
+    .values([
+      {
+        businessId: business.id,
+        type: "playground",
+        name: "Local playground",
+        externalId: "demo-shop-playground",
+      },
+      {
+        businessId: business.id,
+        type: "whatsapp",
+        name: "WhatsApp Official",
+        externalId: "demo-shop-wa",
+      },
+      {
+        businessId: business.id,
+        type: "telegram",
+        name: "Telegram Bot",
+        externalId: "demo-shop-tg",
+      },
+      {
+        businessId: business.id,
+        type: "messenger",
+        name: "Facebook Messenger",
+        externalId: "demo-shop-fb",
+      },
+    ])
     .returning();
 
-  const [tester, stranger] = await tx
+  const [tester, stranger, waCust, tgCust, fbCust] = await tx
     .insert(customers)
     .values([
       {
@@ -60,6 +95,27 @@ await db.transaction(async (tx) => {
         channelId: channel.id,
         externalId: "other-customer",
         name: "Other Customer",
+      },
+      {
+        businessId: business.id,
+        channelId: waChannel.id,
+        externalId: "wa-8801711002233",
+        name: "Nusrat Jahan",
+        phone: "01711002233",
+      },
+      {
+        businessId: business.id,
+        channelId: tgChannel.id,
+        externalId: "tg-998877",
+        name: "Tanvir Rahman",
+        phone: "01811223344",
+      },
+      {
+        businessId: business.id,
+        channelId: fbChannel.id,
+        externalId: "fb-55443322",
+        name: "Sadik Hasan",
+        phone: "01911223344",
       },
     ])
     .returning();
@@ -234,7 +290,261 @@ await db.transaction(async (tx) => {
       reply,
     })),
   );
+
+  // Seed sample conversations for the Unified Inbox
+  const [convPlayground, convWa, convTg, convFb] = await tx
+    .insert(conversations)
+    .values([
+      {
+        businessId: business.id,
+        customerId: tester.id,
+        channelId: channel.id,
+        status: "open",
+        aiEnabled: true,
+        lastMessageAt: new Date(Date.now() - 5 * 60 * 1000),
+      },
+      {
+        businessId: business.id,
+        customerId: waCust.id,
+        channelId: waChannel.id,
+        status: "open",
+        aiEnabled: true,
+        lastMessageAt: new Date(Date.now() - 15 * 60 * 1000),
+      },
+      {
+        businessId: business.id,
+        customerId: tgCust.id,
+        channelId: tgChannel.id,
+        status: "handoff",
+        aiEnabled: false,
+        lastMessageAt: new Date(Date.now() - 25 * 60 * 1000),
+      },
+      {
+        businessId: business.id,
+        customerId: fbCust.id,
+        channelId: fbChannel.id,
+        status: "open",
+        aiEnabled: true,
+        lastMessageAt: new Date(Date.now() - 60 * 60 * 1000),
+      },
+    ])
+    .returning();
+
+  await tx.insert(messages).values([
+    // Playground thread
+    {
+      businessId: business.id,
+      conversationId: convPlayground.id,
+      sender: "customer",
+      content: "white tshirt L size ache?",
+      createdAt: new Date(Date.now() - 6 * 60 * 1000),
+    },
+    {
+      businessId: business.id,
+      conversationId: convPlayground.id,
+      sender: "ai",
+      content: "দুঃখিত ভাইয়া, White T-shirt এর L সাইজ এখন স্টক আউট আছে 🙏 তবে M আর XL সাইজ এভেইলেবল আছে।\n---\nকোন সাইজটা দেখতে চাচ্ছেন?",
+      createdAt: new Date(Date.now() - 5 * 60 * 1000),
+    },
+    // WhatsApp thread
+    {
+      businessId: business.id,
+      conversationId: convWa.id,
+      sender: "customer",
+      content: "Assalamu Alaikum, black tshirt er price koto?",
+      createdAt: new Date(Date.now() - 18 * 60 * 1000),
+    },
+    {
+      businessId: business.id,
+      conversationId: convWa.id,
+      sender: "ai",
+      content: "ওয়ালাইকুম আসসালাম আপু 😊 ব্ল্যাক টি শার্টের প্রাইস ১৩০০ টাকা। ১০০% কটন, রেগুলার ফিট।",
+      createdAt: new Date(Date.now() - 17 * 60 * 1000),
+    },
+    {
+      businessId: business.id,
+      conversationId: convWa.id,
+      sender: "customer",
+      content: "Delivery charge koto lagbe Dhaka te?",
+      createdAt: new Date(Date.now() - 15 * 60 * 1000),
+    },
+    // Telegram thread (Handoff)
+    {
+      businessId: business.id,
+      conversationId: convTg.id,
+      sender: "customer",
+      content: "amar order ORD-1001 er tracking number ta den",
+      createdAt: new Date(Date.now() - 30 * 60 * 1000),
+    },
+    {
+      businessId: business.id,
+      conversationId: convTg.id,
+      sender: "ai",
+      content: "আপনার ORD-1001 অর্ডারটি Pathao কুরিয়ারে shipped হয়েছে, ট্র্যাকিং কোড PT-884213 😊",
+      createdAt: new Date(Date.now() - 28 * 60 * 1000),
+    },
+    {
+      businessId: business.id,
+      conversationId: convTg.id,
+      sender: "customer",
+      content: "ami product ta exchange korte chai, agent er sathe kotha bolbo",
+      createdAt: new Date(Date.now() - 26 * 60 * 1000),
+    },
+    {
+      businessId: business.id,
+      conversationId: convTg.id,
+      sender: "system",
+      content: "Customer requested human assistance. AI assistant paused.",
+      createdAt: new Date(Date.now() - 25 * 60 * 1000),
+    },
+    // Messenger thread
+    {
+      businessId: business.id,
+      conversationId: convFb.id,
+      sender: "customer",
+      content: "Sylhet e delivery koto din lagbe?",
+      createdAt: new Date(Date.now() - 62 * 60 * 1000),
+    },
+    {
+      businessId: business.id,
+      conversationId: convFb.id,
+      sender: "ai",
+      content: "ঢাকার বাইরে ৩-৫ কর্মদিবস সময় লাগে ভাইয়া, আর ডেলিভারি চার্জ ১২০ টাকা 😊",
+      createdAt: new Date(Date.now() - 60 * 60 * 1000),
+    },
+  ]);
+
+  // Seed Second Business: Artisan Leather (Proves Multi-Business Tenant Isolation)
+  const [artisanBiz] = await tx
+    .insert(businesses)
+    .values({
+      slug: SECOND_BUSINESS_SLUG,
+      name: "Artisan Leather BD",
+      description: "Handcrafted pure full-grain leather wallets and bags made in Bangladesh.",
+      toneNotes: "Gentle, premium, courteous tone. Answers in Bengali/English. Emphasizes leather durability.",
+    })
+    .returning();
+
+  await tx.insert(users).values({
+    businessId: artisanBiz.id,
+    email: "artisan@example.com",
+    passwordHash: defaultPasswordHash,
+    name: "Karim Ahmed",
+    role: "owner",
+  });
+
+  const [artisanPlayground, artisanWa] = await tx
+    .insert(channels)
+    .values([
+      {
+        businessId: artisanBiz.id,
+        type: "playground",
+        name: "Artisan Playground",
+        externalId: "artisan-playground",
+      },
+      {
+        businessId: artisanBiz.id,
+        type: "whatsapp",
+        name: "Artisan WhatsApp Official",
+        externalId: "artisan-wa",
+      },
+    ])
+    .returning();
+
+  await tx.insert(products).values([
+    {
+      businessId: artisanBiz.id,
+      sku: "AL-W01",
+      name: "Classic Bifold Leather Wallet",
+      description: "100% full-grain cowhide leather with 8 card slots and currency compartment.",
+      price: "1250.00",
+      currency: "BDT",
+      stockQuantity: 25,
+      attributes: { material: "Full-Grain Leather", color: ["Vintage Brown", "Black"] },
+    },
+    {
+      businessId: artisanBiz.id,
+      sku: "AL-B01",
+      name: "Executive Leather Messenger Bag",
+      description: "Fits up to 15.6 inch laptops. Antique brass hardware and padded strap.",
+      price: "5500.00",
+      currency: "BDT",
+      stockQuantity: 8,
+      attributes: { material: "Top-Grain Leather", color: ["Cognac Tan"] },
+    },
+  ]);
+
+  await tx.insert(deliveryZones).values([
+    {
+      businessId: artisanBiz.id,
+      name: "Inside Dhaka (Artisan Express)",
+      keywords: ["dhaka", "ঢাকা", "banani", "gulshan", "dhanmondi"],
+      isDefault: false,
+      charge: "80.00",
+      minDays: 1,
+      maxDays: 2,
+      freeAbove: "3000.00",
+    },
+    {
+      businessId: artisanBiz.id,
+      name: "All Bangladesh (Outside Dhaka)",
+      keywords: [],
+      isDefault: true,
+      charge: "150.00",
+      minDays: 2,
+      maxDays: 4,
+      freeAbove: "5000.00",
+    },
+  ]);
+
+  await tx.insert(knowledgeDocuments).values({
+    businessId: artisanBiz.id,
+    kind: "policy",
+    title: "Warranty and Leather Care",
+    content: "All Artisan Leather goods carry a 2-year replacement warranty on stitching and zippers. Keep away from water and direct prolonged moisture.",
+  });
+
+  const [artisanCust] = await tx
+    .insert(customers)
+    .values({
+      businessId: artisanBiz.id,
+      channelId: artisanWa.id,
+      externalId: "artisan-cust-1",
+      name: "Zubair Hossain",
+      phone: "+8801811223344",
+      notes: "VIP customer interested in custom leather stamping",
+    })
+    .returning();
+
+  const [artisanConv] = await tx
+    .insert(conversations)
+    .values({
+      businessId: artisanBiz.id,
+      customerId: artisanCust.id,
+      channelId: artisanWa.id,
+      status: "open",
+      aiEnabled: true,
+      lastMessageAt: new Date(Date.now() - 10 * 60 * 1000),
+    })
+    .returning();
+
+  await tx.insert(messages).values([
+    {
+      businessId: artisanBiz.id,
+      conversationId: artisanConv.id,
+      sender: "customer",
+      content: "Vai classic bifold wallet er warranty ache?",
+      createdAt: new Date(Date.now() - 10 * 60 * 1000),
+    },
+    {
+      businessId: artisanBiz.id,
+      conversationId: artisanConv.id,
+      sender: "ai",
+      content: "জি ভাইয়া, আমাদের সব লেদার ওয়ালেটে ২ বছরের স্টিচিং ও জিপার ওয়ারেন্টি পাবেন 😊",
+      createdAt: new Date(Date.now() - 9 * 60 * 1000),
+    },
+  ]);
 });
 
 await closeDb();
-console.log(`Seeded business "${TEST_BUSINESS_SLUG}" with 5 products, 2 delivery zones, 3 orders (2 belong to the tester), 5 knowledge documents and 8 tone examples.`);
+console.log(`Seeded 2 businesses: "${TEST_BUSINESS_SLUG}" (admin@alora.ai) and "${SECOND_BUSINESS_SLUG}" (artisan@example.com).`);
